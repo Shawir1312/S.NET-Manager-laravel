@@ -1,0 +1,36 @@
+/* ======================================================
+   S.NET RADIUS Manager — Print-specific CSS
+   ====================================================== */
+
+@media print {
+  *, *::before, *::after { box-sizing: border-box !important; }
+
+  body {
+    font-family: 'Inter', Arial, sans-serif;
+    font-size: 11pt;
+    background: white !important;
+    margin: 0; padding: 0;
+  }
+
+  #sidebar, #topbar, #page-loader, #toast-container,
+  .no-print, .btn, .navbar, .alert { display: none !important; }
+
+  #main-content {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+  }
+
+  .voucher-grid {
+    display: block; /* use block for floats */
+    padding: 0;
+    margin: 0;
+  }
+
+  /* .voucher-card styles are now inline in print.php */
+
+  @page {
+    margin: 5mm;
+    size: A4 portrait;
+  }
+}

@@ -1,0 +1,6 @@
+# Untuk hosting Apache yang document root-nya folder aplikasi (bukan /public):
+# semua request diteruskan ke /public sehingga .env, storage, dll. tidak bisa diakses dari web.
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule ^(.*)$ public/$1 [L]
+</IfModule>

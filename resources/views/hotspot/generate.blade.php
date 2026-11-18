@@ -1,0 +1,275 @@
+@extends('layouts.app')
+@section('title', 'Generate Voucher')
+@section('page-header')
+@endsection
+@section('content')
+@include('partials.errors')
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Generate Voucher</h1>
+        <p class="page-subtitle">Buat voucher hotspot secara massal — langsung disimpan ke database RADIUS</p>
+    </div>
+    <a href="{{ route('vouchers.index') }}" class="btn btn-outline-primary">
+        <i class="bi bi-list me-1"></i>Daftar Voucher
+    </a>
+</div>
+
+<div class="row g-4">
+    <!-- Form -->
+    <div class="col-12 col-lg-7">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title"><i class="bi bi-plus-circle"></i> Form Generate Voucher</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ route('vouchers.store') }}" id="genForm" autocomplete="off">
+                    @csrf
+
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Jumlah Voucher <span class="text-danger">*</span></label>
+                            <input type="number" class="form-control" name="qty" id="qty"
+                                   min="1" max="{{ \App\Services\Hotspot\VoucherService::MAX_BATCH }}" value="10" required>
+                            <div class="form-text">Maksimal {{ \App\Services\Hotspot\VoucherService::MAX_BATCH }} per generate</div>
+                        </div>
+
+                        <div class="col-md-12">
+                            <label class="form-label">Cabang / Router <span class="text-danger">*</span></label>
+                            <select class="form-select" id="filter_router_id" required>
+                                <option value="">— Pilih Cabang / Router —</option>
+                                @foreach ($all_routers as $r)
+                                <option value="{!! $r['id'] !!}">{{ $r['name'] }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+
+                        <div class="col-md-12">
+                            <label class="form-label">Profil / Paket (Reseller) <span class="text-danger">*</span></label>
+                            <select class="form-select" name="profile_id" id="profile_id" required disabled>
+                                <option value="">— Pilih Cabang Terlebih Dahulu —</option>
+                                @foreach ($profiles as $p)
+                                @php $label = htmlspecialchars($p['name']);
+                                    if ($p['price'] > 0) $label .= ' — ' . format_price((float)$p['price']);
+                                    $r_id = $p['router_id'] ?: 'all'; @endphp
+                                <option value="{!! $p['id'] !!}"
+                                    data-router="{!! $r_id !!}"
+                                    data-duration="{!! $p['duration_value'].' '.$p['duration_unit'] !!}"
+                                    data-quota="{!! $p['quota_mb'] > 0 ? format_bytes($p['quota_mb']*1048576) : 'Unlimited' !!}"
+                                    data-rate="{{ $p['rate_up'].'/'.$p['rate_down'] }}"
+                                    data-price="{!! format_price((float)$p['price']) !!}"
+                                    {!! $p['id'] === $preselect_profile ? 'selected' : '' !!}>
+                                    {!! $label !!}
+                                </option>
+                                @endforeach
+                            </select>
+                        </div>
+                        
+                        <!-- Profile Info Box -->
+                        <div class="col-12" id="profile-info"></div>
+
+                        <div class="col-md-6">
+                            <label class="form-label">Mode Voucher <span class="text-danger">*</span></label>
+                            <select class="form-select" name="user_mode" id="user_mode" required>
+                                <option value="vc">Username = Password (voucher card)</option>
+                                <option value="up">Username ≠ Password (user/pass terpisah)</option>
+                            </select>
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="form-label">Panjang Karakter <span class="text-danger">*</span></label>
+                            <select class="form-select" name="char_length" id="char_length">
+                                @foreach ([4,5,6,7,8,10,12] as $l)
+                                <option value="{!! $l !!}" {!! $l === 8 ? 'selected' : '' !!}>{!! $l !!} karakter</option>
+                                @endforeach
+                            </select>
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="form-label">Tipe Karakter</label>
+                            <select class="form-select" name="char_type">
+                                <option value="mix">Huruf kecil + angka (abc123)</option>
+                                <option value="mix1">Huruf besar + angka (ABC123)</option>
+                                <option value="mix2">Huruf campur + angka (aBc123)</option>
+                                <option value="lower">Huruf kecil (abcdef)</option>
+                                <option value="upper">Huruf besar (ABCDEF)</option>
+                                <option value="num">Angka saja (123456)</option>
+                            </select>
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="form-label">Prefix (opsional)</label>
+                            <input type="text" class="form-control" name="prefix"
+                                   maxlength="8" placeholder="Contoh: HTS">
+                            <div class="form-text">Ditambahkan di depan username</div>
+                        </div>
+                    </div>
+
+                    <!-- Preview -->
+                    <div class="mt-3 p-3 rounded bg-light border">
+                        <div class="fw-600 mb-1" style="font-size:.8rem;">Preview username yang akan dibuat:</div>
+                        <code id="preview-user" class="text-blue" style="font-size:.88rem;">—</code>
+                        <span class="text-muted ms-2" style="font-size:.75rem;">(contoh acak)</span>
+                    </div>
+
+                    <div class="mt-4 d-flex gap-2">
+                        <button type="submit" class="btn btn-primary btn-lg" id="genBtn" onclick="showLoader()">
+                            <i class="bi bi-magic me-1"></i> Generate {!! '<span id="qty-label">10</span>' !!} Voucher
+                        </button>
+                        <button type="reset" class="btn btn-outline-secondary">Reset</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sidebar Info -->
+    <div class="col-12 col-lg-5">
+        <!-- Last Batch -->
+        @if ($last_batch)
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5 class="card-title"><i class="bi bi-clock-history"></i> Generate Terakhir Anda</h5>
+            </div>
+            <div class="card-body">
+                <table class="table table-sm mb-3">
+                    <tr><th>Batch ID</th><td class="font-mono fw-600">{{ $last_batch['batch_id'] }}</td></tr>
+                    <tr><th>Profil</th><td>{{ $last_batch['profile_name'] }}</td></tr>
+                    <tr><th>Router</th><td>{{ $last_batch['router_name'] ?? 'Semua Router' }}</td></tr>
+                    <tr><th>Jumlah</th><td><span class="badge bg-primary">{!! $last_batch['qty'] !!}</span></td></tr>
+                    <tr><th>Waktu</th><td>{!! date('d M Y H:i', strtotime($last_batch['created_at'])) !!}</td></tr>
+                </table>
+                <div class="d-flex gap-2">
+                    <a href="{{ route('vouchers.print', ['batch_id' => $last_batch['batch_id']]) }}"
+                       class="btn btn-primary btn-sm" target="_blank">
+                        <i class="bi bi-printer me-1"></i>Cetak Batch
+                    </a>
+                    <a href="{{ route('vouchers.index', ['batch_id' => $last_batch['batch_id']]) }}"
+                       class="btn btn-outline-primary btn-sm">
+                        <i class="bi bi-list me-1"></i>Lihat Voucher
+                    </a>
+                </div>
+            </div>
+        </div>
+        @endif
+
+        <!-- Tips -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title"><i class="bi bi-lightbulb"></i> Cara Kerja</h5>
+            </div>
+            <div class="card-body" style="font-size:.82rem;">
+                <ol class="mb-0">
+                    <li class="mb-2">Voucher di-generate secara lokal — <strong>tidak perlu koneksi ke router</strong></li>
+                    <li class="mb-2">Username & password disimpan ke <code>radcheck</code> (autentikasi) dan <code>radreply</code> (atribut: rate limit, timeout, quota)</li>
+                    <li class="mb-2">Saat pengguna konek ke hotspot MikroTik, router meneruskan autentikasi ke FreeRADIUS</li>
+                    <li class="mb-2">FreeRADIUS mengecek tabel <code>radcheck</code> lalu balasan dari <code>radreply</code></li>
+                    <li>Session dicatat di <code>radacct</code> untuk monitoring & laporan</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+// Update qty label
+const qtyInput = document.getElementById('qty');
+const qtyLabel = document.getElementById('qty-label');
+if (qtyInput && qtyLabel) {
+    qtyInput.addEventListener('input', () => qtyLabel.textContent = qtyInput.value);
+}
+
+const profileSel  = document.getElementById('profile_id');
+const profileInfo = document.getElementById('profile-info');
+const routerSel   = document.getElementById('filter_router_id');
+
+// Router & Profile filter
+if (routerSel && profileSel) {
+    const allProfiles = Array.from(profileSel.options).slice(1); // Skip placeholder
+    
+    routerSel.addEventListener('change', function() {
+        const r_id = this.value;
+        profileSel.innerHTML = ''; // Clear current options
+        
+        const placeholder = document.createElement('option');
+        placeholder.value = '';
+        
+        if (!r_id) {
+            profileSel.disabled = true;
+            placeholder.textContent = '— Pilih Cabang Terlebih Dahulu —';
+            profileSel.appendChild(placeholder);
+            if (typeof window.updateProfileInfo === 'function') window.updateProfileInfo();
+            return;
+        }
+        
+        profileSel.disabled = false;
+        placeholder.textContent = '— Pilih Profil —';
+        profileSel.appendChild(placeholder);
+        
+        allProfiles.forEach(opt => {
+            const optRouter = opt.getAttribute('data-router');
+            if (optRouter === r_id || optRouter === 'all') {
+                profileSel.appendChild(opt.cloneNode(true));
+            }
+        });
+        
+        if (typeof window.updateProfileInfo === 'function') window.updateProfileInfo();
+    });
+    
+    // Trigger change event on load to set initial state
+    routerSel.dispatchEvent(new Event('change'));
+}
+
+// Profile info box
+if (profileSel && profileInfo) {
+    window.updateProfileInfo = function() {
+        const opt = profileSel.options[profileSel.selectedIndex];
+        if (!opt || !opt.value) { profileInfo.innerHTML = ''; return; }
+        profileInfo.innerHTML = `
+            <div class="p-3 rounded" style="background:var(--blue-pale);border-left:3px solid var(--blue);">
+                <div class="row g-2" style="font-size:.8rem;">
+                    <div class="col-3"><strong>Durasi</strong><br>${opt.dataset.duration || '-'}</div>
+                    <div class="col-3"><strong>Kuota</strong><br>${opt.dataset.quota || '-'}</div>
+                    <div class="col-3"><strong>Rate Limit</strong><br><code>${opt.dataset.rate || '-'}</code></div>
+                    <div class="col-3"><strong>Harga</strong><br><span class="fw-600 text-red">${opt.dataset.price || '-'}</span></div>
+                </div>
+            </div>`;
+    };
+    profileSel.addEventListener('change', window.updateProfileInfo);
+    window.updateProfileInfo();
+}
+
+// Preview username
+const previewEl = document.getElementById('preview-user');
+if (previewEl) {
+    function generatePreview() {
+        const lenEl  = document.getElementById('char_length');
+        const typeEl = document.querySelector('[name=char_type]');
+        const prefEl = document.querySelector('[name=prefix]');
+        if (!lenEl || !typeEl || !prefEl) return;
+        const len  = parseInt(lenEl.value) || 6;
+        const type = typeEl.value;
+        const pref = prefEl.value;
+        const chars = {
+            mix:   'abcdefghjkmnpqrstuvwxyz23456789',
+            mix1:  'ABCDEFGHJKMNPQRSTUVWXYZ23456789',
+            mix2:  'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ23456789',
+            lower: 'abcdefghjkmnpqrstuvwxyz',
+            upper: 'ABCDEFGHJKMNPQRSTUVWXYZ',
+            num:   '234567890123456789',
+        }[type] || 'abcdefghjkmnpqrstuvwxyz23456789';
+        let preview = pref;
+        for (let i = 0; i < len; i++) preview += chars[Math.floor(Math.random() * chars.length)];
+        previewEl.textContent = preview;
+    }
+    document.getElementById('char_length')?.addEventListener('change', generatePreview);
+    document.querySelector('[name=char_type]')?.addEventListener('change', generatePreview);
+    document.querySelector('[name=prefix]')?.addEventListener('input', generatePreview);
+    generatePreview();
+}
+})();
+</script>
+
+
+
+@endsection

@@ -1,0 +1,39 @@
+/* Komponen dari mesin ONT (wizard, detail ONT, timeline) + tabel jadi kartu di HP.
+   Tampilan utama memakai public/snet/app.css asli S.NET. */
+:root { --app-accent: #1565C0; }
+.chart-box { position: relative; height: 240px; }
+/* ---------- Wizard ---------- */
+.wizard-steps { list-style: none; padding: 0; margin: 0; display: flex; gap: .5rem; overflow-x: auto; scrollbar-width: thin; }
+.wizard-step { display: flex; align-items: center; gap: .45rem; padding: .4rem .75rem .4rem .45rem; border-radius: 2rem;
+    background: var(--bs-tertiary-bg); color: var(--bs-secondary-color); font-size: .82rem; white-space: nowrap; }
+.wizard-step.active { background: var(--app-accent); color: #fff; }
+.wizard-step.locked { opacity: .55; }
+.wizard-num { width: 22px; height: 22px; border-radius: 50%; display: inline-grid; place-items: center; font-weight: 600;
+    background: rgba(127,127,127,.18); font-size: .75rem; }
+.wizard-step.active .wizard-num { background: rgba(255,255,255,.25); }
+
+/* ---------- Info ONT ---------- */
+.info-label { font-size: .75rem; color: var(--bs-secondary-color); text-transform: uppercase; letter-spacing: .03em; }
+.info-value { font-weight: 500; word-break: break-word; }
+.param-table-wrap { max-height: 60vh; overflow: auto; }
+
+.wizard-step.done { background: rgba(34,160,107,.15); color: #22a06b; }
+.svc-option { white-space: normal; }
+.result-banner { font-size: 1.8rem; font-weight: 700; margin-bottom: .5rem; }
+.timeline { border-left: 2px solid var(--bs-border-color); padding-left: 1rem; }
+.timeline-item { position: relative; padding: .25rem 0; font-size: .875rem; }
+.timeline-item::before { content: ''; position: absolute; left: -1.38rem; top: .6rem; width: 10px; height: 10px; border-radius: 50%; background: var(--bs-secondary-color); }
+.timeline-item.tl-success::before { background: #22a06b; }
+.timeline-item.tl-warning::before { background: #f5a524; }
+.timeline-item.tl-error::before { background: #e5484d; }
+.timeline-item.tl-info::before { background: var(--app-accent); }
+/* Tabel lebar jadi kartu di HP: beri <table class="table-stack"> dan data-label di tiap <td>. */
+@media (max-width: 767.98px) {
+    .table-stack thead { display: none; }
+    .table-stack tr { display: block; border: 1px solid var(--bs-border-color-translucent); border-radius: .6rem; margin-bottom: .6rem; padding: .35rem .6rem; background: var(--bs-body-bg); }
+    .table-stack td { display: flex; justify-content: space-between; gap: 1rem; border: 0 !important; padding: .3rem 0 !important; text-align: right; }
+    .table-stack td::before { content: attr(data-label); font-weight: 600; color: var(--bs-secondary-color); text-align: left; }
+    .table-stack td[data-label=""]::before { content: none; }
+}
+
+[data-bs-theme="light"] .theme-icon-dark, [data-bs-theme="dark"] .theme-icon-light { display: none; }

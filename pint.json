@@ -1,0 +1,4 @@
+{
+    "preset": "laravel",
+    "notPath": ["app/Services/Mikrotik/RouterosAPI.php"]
+}
