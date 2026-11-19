@@ -17,14 +17,18 @@ window.NetworkMap = (() => {
      *         onData(data), listEl }
      */
     function init(opts) {
-        const map = L.map(opts.el, { zoomControl: true, maxZoom: 20 }).setView([-2.5, 118], 5);
+        // Zoom sampai 22: di atas level asli tiap sumber, tile terakhir diperbesar (tidak kosong / "Map data not yet available").
+        const map = L.map(opts.el, { zoomControl: true, maxZoom: 22 }).setView([-2.5, 118], 5);
         // Referer wajib dikirim ke server tile (Referrer-Policy aplikasi = same-origin; tanpa ini OSM menjawab 403).
-        const ref = { referrerPolicy: 'strict-origin-when-cross-origin' };
-        const esri = 'https://server.arcgisonline.com/ArcGIS/rest/services/';
-        // Lapisan label Esri digambar bergaris di batas tile, jadi satelit dipakai tanpa overlay; nama jalan ada di "Peta jalan".
-        const satellite = L.tileLayer(esri + 'World_Imagery/MapServer/tile/{z}/{y}/{x}', { ...ref, maxZoom: 20, maxNativeZoom: 19, attribution: 'Citra &copy; Esri, Maxar, Earthstar Geographics' }).addTo(map);
-        const streets = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { ...ref, maxZoom: 20, maxNativeZoom: 19, attribution: '&copy; OpenStreetMap' });
-        L.control.layers({ 'Satelit': satellite, 'Peta jalan': streets }, null, { position: 'topright' }).addTo(map);
+        const ref = { referrerPolicy: 'strict-origin-when-cross-origin', maxZoom: 22 };
+        // Sumber gratis tanpa API key. Citra Esri umumnya tersedia s.d. zoom 18 di Indonesia; OpenStreetMap s.d. 19.
+        const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { ...ref, maxNativeZoom: 18, attribution: 'Citra &copy; Esri, Maxar, Earthstar Geographics' });
+        const streets = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { ...ref, maxNativeZoom: 19, attribution: '&copy; OpenStreetMap contributors' });
+        const saved = (() => { try { return localStorage.getItem('snet-map-layer'); } catch (e) { return null; } })();
+        (saved === 'streets' ? streets : satellite).addTo(map);
+        L.control.layers({ 'Satelit': satellite, 'Peta jalan (OpenStreetMap)': streets }, null, { position: 'topright' }).addTo(map);
+        map.on('baselayerchange', e => { try { localStorage.setItem('snet-map-layer', e.layer === streets ? 'streets' : 'satellite'); } catch (err) { /* abaikan */ } });
+        L.control.scale({ imperial: false }).addTo(map);
         const layer = L.layerGroup().addTo(map);
         let data = null, fitted = false, addMode = null, timer = null;
         const markers = { customer: {}, odp: {} };
@@ -71,7 +75,7 @@ window.NetworkMap = (() => {
 
             if (!fitted) {
                 const pts = [...data.customers, ...data.odps, ...(hasServer ? [s] : [])].map(p => [p.lat, p.lng]);
-                if (pts.length) map.fitBounds(pts, { padding: [40, 40], maxZoom: 17 });
+                if (pts.length) map.fitBounds(pts, { padding: [40, 40], maxZoom: 18 });
                 fitted = true;
             }
             renderList();
@@ -120,7 +124,7 @@ window.NetworkMap = (() => {
             opts.listEl.querySelectorAll('[data-zoom-odp]').forEach(b => b.addEventListener('click', () => focus(markers.odp[b.dataset.zoomOdp])));
         }
 
-        function focus(m) { if (m) { map.setView(m.getLatLng(), Math.max(map.getZoom(), 18)); m.openPopup(); } }
+        function focus(m) { if (m) { map.setView(m.getLatLng(), Math.max(map.getZoom(), 19)); m.openPopup(); } }
 
         async function save(u, method, body) {
             try {
