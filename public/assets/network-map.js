@@ -29,6 +29,22 @@ window.NetworkMap = (() => {
         L.control.layers({ 'Satelit': satellite, 'Peta jalan (OpenStreetMap)': streets }, null, { position: 'topright' }).addTo(map);
         map.on('baselayerchange', e => { try { localStorage.setItem('snet-map-layer', e.layer === streets ? 'streets' : 'satellite'); } catch (err) { /* abaikan */ } });
         L.control.scale({ imperial: false }).addTo(map);
+        // Jalan belum ada di peta jalan? Buka editor OpenStreetMap tepat di lokasi yang sedang dilihat.
+        const FixMap = L.Control.extend({
+            onAdd() {
+                const a = L.DomUtil.create('a', 'btn btn-light btn-sm shadow-sm border');
+                a.innerHTML = '<i class="bi bi-pencil-square me-1"></i>Perbaiki peta';
+                a.title = 'Tambah / perbaiki jalan di OpenStreetMap (gratis, perlu akun OSM)';
+                a.target = '_blank';
+                a.rel = 'noopener';
+                const sync = () => { const c = map.getCenter(); a.href = `https://www.openstreetmap.org/edit#map=${Math.min(Math.max(Math.round(map.getZoom()), 16), 21)}/${c.lat.toFixed(6)}/${c.lng.toFixed(6)}`; };
+                map.on('moveend', sync);
+                sync();
+                L.DomEvent.disableClickPropagation(a);
+                return a;
+            },
+        });
+        new FixMap({ position: 'bottomright' }).addTo(map);
         const layer = L.layerGroup().addTo(map);
         let data = null, fitted = false, addMode = null, timer = null;
         const markers = { customer: {}, odp: {} };
