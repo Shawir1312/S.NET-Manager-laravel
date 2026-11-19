@@ -3,6 +3,7 @@
 namespace App\Services\ONT;
 
 use App\Enums\DeviceReadiness;
+use App\Models\ConfigurationJob;
 use App\Models\OntDevice;
 use App\Repositories\OntDeviceRepository;
 use App\Services\Audit\AuditLogger;
@@ -156,26 +157,59 @@ class OntLookupService
      *
      * @return array{synced: int, pages: int}
      */
+    /**
+     * Sinkron semua ONT dari server GenieACS aktif: identitas + data live (IP, SSID, redaman).
+     * ONT milik server ini yang tidak lagi ada di ACS (mis. setelah ganti server) dihapus;
+     * yang punya riwayat konfigurasi hanya dilepas dari server agar riwayatnya tetap utuh.
+     *
+     * @return array{synced: int, removed: int, pages: int}
+     */
     public function syncAll(int $pageSize = 500, int $maxPages = 200): array
     {
+        $start = now()->startOfSecond();
         $synced = 0;
+        $complete = false;
         for ($page = 0; $page < $maxPages; $page++) {
-            $batch = $this->acs->listDevices($pageSize, $page * $pageSize);
+            $batch = $this->acs->listDevices($pageSize, $page * $pageSize, OntLiveInfo::PROJECTION);
             foreach ($batch as $tree) {
                 if (blank($tree->deviceId()['serial_number'])) {
                     continue;
                 }
-                $this->devices->upsertFromGenieAcs($tree, $this->detector->detect($tree));
+                $device = $this->devices->upsertFromGenieAcs($tree, $this->detector->detect($tree));
+                $live = OntLiveInfo::fromTree($tree);
+                $device->forceFill([
+                    'ip_address' => $live['ip_address'] ?? $device->ip_address,
+                    'parameters_snapshot' => array_merge((array) $device->parameters_snapshot, [
+                        'ssid_24' => $live['ssid_24'], 'ssid_5g' => $live['ssid_5g'], 'rx' => $live['rx'], 'tx' => $live['tx'],
+                    ]),
+                ])->save();
                 $synced++;
             }
             if (count($batch) < $pageSize) {
+                $complete = true;
                 break;
             }
         }
 
-        $this->audit->log('ont.sync', null, ['synced' => $synced]);
+        $removed = $complete ? $this->pruneMissing($start) : 0;
+        $this->audit->log('ont.sync', null, ['synced' => $synced, 'removed' => $removed]);
 
-        return ['synced' => $synced, 'pages' => $page + 1];
+        return ['synced' => $synced, 'removed' => $removed, 'pages' => $page + 1];
+    }
+
+    /** ONT server aktif yang tidak terlihat pada sinkron penuh terakhir. */
+    private function pruneMissing(\DateTimeInterface $start): int
+    {
+        $serverId = GenieACSService::currentSetting()?->id;
+        $stale = OntDevice::where('genie_acs_setting_id', $serverId)
+            ->where(fn ($q) => $q->whereNull('synced_at')->orWhere('synced_at', '<', $start))->get();
+        foreach ($stale as $device) {
+            ConfigurationJob::where('ont_device_id', $device->id)->exists()
+                ? $device->forceFill(['genie_acs_setting_id' => null])->save()
+                : $device->delete();
+        }
+
+        return $stale->count();
     }
 
     /** @return array<string, mixed> */

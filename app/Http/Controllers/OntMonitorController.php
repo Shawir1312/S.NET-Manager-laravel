@@ -12,6 +12,7 @@ use App\Services\Provisioning\ProvisioningService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\View\View;
 use RuntimeException;
@@ -35,26 +36,39 @@ class OntMonitorController extends Controller
 
         return view('ont-monitor.index', [
             'devices' => $devices, 'servers' => $servers, 'selServer' => $selServer, 'threshold' => $threshold,
+            'lastSync' => $selServer ? Cache::get(self::syncKey($selServer->id)) : null,
             'remotes' => OntRemote::where('is_active', true)->where('expires_at', '>', now())->get()->keyBy('ont_sn'),
             'remoteService' => app(OntRemoteService::class),
         ]);
     }
 
     /** Sinkronkan daftar ONT dari setiap server GenieACS aktif. */
-    public function sync(): RedirectResponse
+    /** Sinkronkan ONT dari server GenieACS (semua server aktif, atau satu server via server_id). */
+    public function sync(Request $request): RedirectResponse|JsonResponse
     {
         Gate::authorize('configure-ont');
+        $servers = GenieAcsSetting::where('is_active', true)->when($request->integer('server_id'), fn ($q, $id) => $q->whereKey($id))->get();
         $msgs = [];
-        foreach (GenieAcsSetting::where('is_active', true)->get() as $server) {
+        $ok = true;
+        foreach ($servers as $server) {
             GenieACSService::use($server);
             try {
-                $msgs[] = "{$server->name}: ".app(OntLookupService::class)->syncAll()['synced'].' ONT';
+                $r = app(OntLookupService::class)->syncAll();
+                Cache::put(self::syncKey($server->id), now()->getTimestamp(), now()->addDay());
+                $msgs[] = "{$server->name}: {$r['synced']} ONT".($r['removed'] ? ", {$r['removed']} ONT lama dihapus" : '');
             } catch (Throwable $e) {
+                $ok = false;
                 $msgs[] = "{$server->name}: gagal ({$e->getMessage()})";
             }
         }
+        $message = 'Sinkronisasi selesai. '.implode(' · ', $msgs);
 
-        return back()->with('status', 'Sinkronisasi selesai. '.implode(' · ', $msgs));
+        return $request->wantsJson() ? response()->json(['success' => $ok, 'message' => $message]) : back()->with('status', $message);
+    }
+
+    public static function syncKey(int $serverId): string
+    {
+        return "ont-monitor:last-sync:{$serverId}";
     }
 
     public function remote(Request $request, OntDevice $device, OntRemoteService $remotes): RedirectResponse|JsonResponse

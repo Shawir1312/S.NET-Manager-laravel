@@ -18,6 +18,7 @@
     <div class="d-flex align-items-center gap-2">
         <h5 class="fw-bold mb-0 text-dark d-flex align-items-center"><i class="bi bi-router-fill text-primary me-2"></i>Server: <span class="text-primary ms-1">{{ $selServer->name ?? 'SERVER ACS' }}</span></h5>
         <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 px-2 py-1 fs-7">{{ $devices->count() }} ONT</span>
+        <small class="text-muted" id="syncInfo"><i class="bi bi-clock-history me-1"></i>{{ $lastSync ? 'Sinkron '.\Illuminate\Support\Carbon::createFromTimestamp($lastSync)->diffForHumans() : 'Belum pernah sinkron' }}</small>
     </div>
     <div class="d-flex align-items-center gap-2">
         @if ($servers->count() > 1)
@@ -142,10 +143,41 @@ const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]').content;
 const jsonReq = (url, method) => fetch(url, {method, headers: {'X-CSRF-TOKEN': CSRF_TOKEN, 'Accept': 'application/json'}}).then(r => r.json());
 const fmt = rem => String(Math.floor(rem / 60)).padStart(2, '0') + ':' + String(rem % 60).padStart(2, '0');
 
-document.getElementById('ontSearchInput')?.addEventListener('input', e => {
-    const q = e.target.value.toLowerCase().trim();
+const searchBox = document.getElementById('ontSearchInput');
+function applySearch() {
+    const q = (searchBox?.value || '').toLowerCase().trim();
+    try { sessionStorage.setItem('ontSearch', q); } catch (e) {}
     document.querySelectorAll('.ont-card-wrapper').forEach(card => card.style.display = card.dataset.search.includes(q) ? '' : 'none');
-});
+}
+searchBox?.addEventListener('input', applySearch);
+try { if (searchBox && sessionStorage.getItem('ontSearch')) { searchBox.value = sessionStorage.getItem('ontSearch'); applySearch(); } } catch (e) {}
+
+@if ($selServer)
+@can('configure-ont')
+// Data real-time: sinkron ke GenieACS saat halaman dibuka (bila >60 dtk sejak sinkron terakhir) lalu tiap 2 menit.
+(function () {
+    const SYNC_URL = @json(route('ont-monitor.sync', ['server_id' => $selServer->id]));
+    const lastSync = @json($lastSync);
+    const info = document.getElementById('syncInfo');
+    let busy = false;
+    async function syncNow() {
+        if (busy || document.hidden || document.querySelector('.modal.show')) return;
+        busy = true;
+        info.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Sinkron dari ACS…';
+        try {
+            const res = await jsonReq(SYNC_URL, 'POST');
+            if (res.success) { location.reload(); return; }
+            info.innerHTML = '<span class="text-danger"><i class="bi bi-exclamation-triangle me-1"></i>' + escHtml(res.message || 'Sinkron gagal') + '</span>';
+        } catch (e) {
+            info.innerHTML = '<span class="text-danger"><i class="bi bi-exclamation-triangle me-1"></i>Sinkron gagal: ' + escHtml(e.message) + '</span>';
+        }
+        busy = false;
+    }
+    if (!lastSync || Date.now() / 1000 - lastSync > 60) syncNow();
+    setInterval(syncNow, 120000);
+})();
+@endcan
+@endif
 
 function runCountdown(btn, rem) {
     const span = btn.querySelector('.rem-btn-timer');
