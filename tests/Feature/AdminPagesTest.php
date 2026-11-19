@@ -42,6 +42,7 @@ class AdminPagesTest extends TestCase
             'name' => 'PPPoE KANTOR', 'service_type' => 'pppoe', 'slot' => 'ppp', 'vlan_id' => 250, 'service_list' => 'INTERNET',
             'lan' => [1, 2], 'wlan' => [1, 2], 'pppoe_password' => 'jangan-disimpan', 'is_default' => 1,
             'ssid_names' => [2 => 'S.NET @Hotspot', 3 => 'tidak di-bind'],
+            'hotspot_template_id' => ConfigurationTemplate::where('service_type', 'bridge')->value('id'),
         ])->assertRedirect('/templates');
 
         $t = ConfigurationTemplate::where('name', 'PPPoE KANTOR')->firstOrFail();
@@ -52,6 +53,7 @@ class AdminPagesTest extends TestCase
         $this->assertSame([['index' => 2, 'ssid_name' => 'S.NET @Hotspot']], $t->payload['ssids']);
         $this->assertStringNotContainsString('jangan-disimpan', json_encode($t->payload));
         $this->assertSame([1, 2], $t->payload['binding']['lan']);
+        $this->assertSame(ConfigurationTemplate::where('service_type', 'bridge')->value('id'), $t->payload['hotspot_template_id'], 'template PPPoE menyertakan layanan hotspot');
 
         $this->actingAs($this->admin)->post("/templates/{$t->id}/copy")->assertRedirect();
         $this->assertDatabaseHas('configuration_templates', ['name' => 'PPPoE KANTOR (salinan)', 'is_default' => false]);

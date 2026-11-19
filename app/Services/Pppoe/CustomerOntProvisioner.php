@@ -116,7 +116,11 @@ class CustomerOntProvisioner
     {
         $device = $this->findDevice($customer);
         $pppoeTemplate = $this->templateFor($customer, ServiceType::Pppoe, $pppoeTemplateId);
-        $hotspotTemplate = $withHotspot ? $this->templateFor($customer, ServiceType::Bridge, $hotspotTemplateId) : null;
+        // Template PPPoE yang menyertakan layanan Hotspot otomatis ikut memasang WAN hotspot-nya.
+        $linkedHotspot = $pppoeTemplate->payload['hotspot_template_id'] ?? null;
+        $hotspotTemplate = $withHotspot || $linkedHotspot
+            ? $this->templateFor($customer, ServiceType::Bridge, $withHotspot ? $hotspotTemplateId : (int) $linkedHotspot)
+            : null;
 
         // Port/SSID template yang tidak ada di ONT ini dilewati; yang ada tetap diterapkan.
         [$pppoeInput, $skipped] = $this->provisioning->fitInterfaces($device, $this->buildInput($customer, $pppoeTemplate, $pppoePassword));

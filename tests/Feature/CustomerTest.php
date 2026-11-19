@@ -81,6 +81,20 @@ class CustomerTest extends TestCase
         $this->assertStringNotContainsString('12345678', json_encode($jobs->pluck('request_payload')));
     }
 
+    public function test_pppoe_template_with_linked_hotspot_adds_hotspot_wan_automatically(): void
+    {
+        (new StatefulGenieAcs($this->fiberhomeDoc()))->fake();
+        $hotspot = ConfigurationTemplate::where('service_type', 'bridge')->firstOrFail();
+        $hotspot->update(['payload' => array_replace_recursive($hotspot->payload, ['wan' => ['vlan_id' => 300]])]);
+        $pppoe = ConfigurationTemplate::where('service_type', 'pppoe')->firstOrFail();
+        $pppoe->update(['payload' => ['hotspot_template_id' => $hotspot->id] + $pppoe->payload]);
+
+        // Tanpa centang "Tambah WAN Hotspot": hotspot tetap ikut karena disertakan di template PPPoE.
+        $this->actingAs($this->operator)->post('/customers', $this->form(['push_ont' => 1]))->assertSessionHasNoErrors();
+
+        $this->assertSame([ServiceType::Pppoe, ServiceType::Bridge], ConfigurationJob::orderBy('id')->pluck('service_type')->all());
+    }
+
     public function test_conflicting_hotspot_is_reported_not_silently_dropped(): void
     {
         (new StatefulGenieAcs($this->fiberhomeDoc()))->fake(); // template hotspot bawaan VLAN 100 = bentrok dengan WAN TR069

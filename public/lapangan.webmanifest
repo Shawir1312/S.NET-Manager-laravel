@@ -1,0 +1,10 @@
+{
+    "name": "S.NET Lapangan",
+    "short_name": "S.NET Lapangan",
+    "start_url": "/lapangan",
+    "scope": "/",
+    "display": "standalone",
+    "background_color": "#ffffff",
+    "theme_color": "#0d6efd",
+    "icons": [{ "src": "/snet/logo.png", "sizes": "any", "type": "image/png" }]
+}

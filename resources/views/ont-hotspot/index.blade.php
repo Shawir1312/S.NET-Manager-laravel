@@ -1,4 +1,4 @@
-@extends('layouts.app')
+@extends(request()->routeIs('field.*') ? 'layouts.field' : 'layouts.app')
 @section('title', 'Setting ONT Hotspot')
 @section('page-header')
 <div class="page-header">

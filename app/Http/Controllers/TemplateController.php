@@ -8,6 +8,7 @@ use App\Services\Audit\AuditLogger;
 use App\Services\ONT\Mappers\WANMapper;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
@@ -30,7 +31,7 @@ class TemplateController extends Controller
     {
         Gate::authorize('manage-templates');
 
-        return view('templates.form', ['template' => new ConfigurationTemplate(['service_type' => ServiceType::Bridge, 'payload' => []])]);
+        return view('templates.form', ['template' => new ConfigurationTemplate(['service_type' => ServiceType::Bridge, 'payload' => []]), 'hotspotTemplates' => $this->hotspotTemplates()]);
     }
 
     public function store(Request $request): RedirectResponse
@@ -47,7 +48,7 @@ class TemplateController extends Controller
     {
         Gate::authorize('manage-templates');
 
-        return view('templates.form', compact('template'));
+        return view('templates.form', ['template' => $template, 'hotspotTemplates' => $this->hotspotTemplates()]);
     }
 
     public function update(Request $request, ConfigurationTemplate $template): RedirectResponse
@@ -102,6 +103,12 @@ class TemplateController extends Controller
         }
     }
 
+    /** @return Collection<int, ConfigurationTemplate> */
+    private function hotspotTemplates(): Collection
+    {
+        return ConfigurationTemplate::where('service_type', ServiceType::Bridge->value)->orderBy('name')->get(['id', 'name']);
+    }
+
     private function validated(Request $request, ?ConfigurationTemplate $template = null): array
     {
         $d = $request->validate([
@@ -120,6 +127,7 @@ class TemplateController extends Controller
             'ssid_names' => ['array'], 'ssid_names.*' => ['nullable', 'string', 'max:32'],
             'wifi_security' => ['nullable', 'in:keep,open,password'],
             'wifi_key' => ['nullable', 'string', 'min:8', 'max:63'],
+            'hotspot_template_id' => ['nullable', 'integer', Rule::exists('configuration_templates', 'id')->where('service_type', ServiceType::Bridge->value)],
         ]);
         // Keamanan WiFi hotspot: password disimpan TERENKRIPSI (bukan teks biasa); kosong saat edit = tidak diubah.
         $security = $d['service_type'] === 'bridge' ? ($d['wifi_security'] ?? 'keep') : 'keep';
@@ -154,6 +162,8 @@ class TemplateController extends Controller
                 'binding' => ['lan' => array_map('intval', $d['lan'] ?? []), 'wlan' => $wlan],
                 'ssids' => $ssids,
                 'wifi' => ['security' => $security, 'key_enc' => $security === 'password' ? $keyEnc : null],
+                // Template PPPoE boleh menyertakan layanan Hotspot: WAN hotspot ikut dipasang saat template ini dipakai.
+                'hotspot_template_id' => $pppoe && filled($d['hotspot_template_id'] ?? null) ? (int) $d['hotspot_template_id'] : null,
             ],
         ];
     }

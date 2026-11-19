@@ -1,9 +1,10 @@
-@extends('layouts.app')
+@extends(request()->routeIs('field.*') ? 'layouts.field' : 'layouts.app')
 @section('title', $customer->exists ? 'Edit Pelanggan' : 'Tambah Pelanggan PPPoE')
 @section('content')
 @include('partials.errors')
 @php($edit = $customer->exists)
 <form method="POST" action="{{ $edit ? route('customers.update', $customer) : route('customers.store') }}" autocomplete="off" id="customerForm">
+    @if (request()->routeIs('field.*'))<input type="hidden" name="from_field" value="1">@endif
     @csrf @if ($edit) @method('PUT') @endif
     <div class="row g-3">
         <div class="col-lg-6">
@@ -64,7 +65,7 @@
     </div>
 
     <div class="d-flex gap-2 justify-content-end mt-3 position-sticky bottom-0 py-2 bg-body">
-        <a href="{{ $edit ? route('customers.show', $customer) : route('customers.index') }}" class="btn btn-outline-secondary">Batal</a>
+        <a href="{{ request()->routeIs('field.*') ? route('field.home') : ($edit ? route('customers.show', $customer) : route('customers.index')) }}" class="btn btn-outline-secondary">Batal</a>
         <button class="btn btn-primary px-4"><i class="bi bi-save"></i> Simpan</button>
     </div>
 </form>

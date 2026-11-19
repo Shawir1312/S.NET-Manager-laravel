@@ -4,6 +4,7 @@
     $sections = [
         'Utama' => [
             ['Dashboard', 'bi-speedometer2', 'dashboard', null],
+            ['Aplikasi Lapangan (HP)', 'bi-phone', 'field.home', null, [], 'field.*'],
         ],
         'Monitoring' => [
             ['User Aktif', 'bi-wifi', 'monitoring.active', 'operate'],

@@ -175,7 +175,9 @@ class CustomerController extends Controller
             return back()->withInput()->withErrors(['router_id' => $e->getMessage()]);
         }
 
-        return redirect()->route('customers.show', $r['customer'])->with('status', implode(' ', $r['notes']));
+        // Dari aplikasi lapangan: kembali ke beranda lapangan, bukan halaman admin.
+        return ($request->boolean('from_field') ? redirect()->route('field.home') : redirect()->route('customers.show', $r['customer']))
+            ->with('status', implode(' ', $r['notes']));
     }
 
     public function show(PppoeCustomer $customer): View

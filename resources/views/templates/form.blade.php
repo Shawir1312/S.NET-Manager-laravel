@@ -66,11 +66,24 @@
                 <div class="form-text">Berlaku untuk semua SSID yang di-bind di template hotspot ini. Password disimpan terenkripsi.</div>
             </div>
         </div>
+        <div class="col-12" id="pppoeHotspotBox">
+            <div class="p-3 rounded border bg-light">
+                <div class="form-label fw-semibold mb-2"><i class="bi bi-broadcast-pin me-1 text-primary"></i>Tambahan Layanan Hotspot</div>
+                <select class="form-select" name="hotspot_template_id" style="max-width: 420px;">
+                    <option value="">Tanpa hotspot (PPPoE saja)</option>
+                    @foreach ($hotspotTemplates as $h)
+                        <option value="{{ $h->id }}" @selected((int) old('hotspot_template_id', $p['hotspot_template_id'] ?? 0) === $h->id)>{{ $h->name }}</option>
+                    @endforeach
+                </select>
+                <div class="form-text">Bila dipilih, setiap ONT yang memakai template PPPoE ini otomatis juga dipasang WAN Hotspot (VLAN, SSID, keamanan WiFi dari template hotspot tersebut).</div>
+            </div>
+        </div>
         <script>
             (() => {
                 const type = document.querySelector('[name=service_type]'), box = document.getElementById('hotspotWifiBox'), keyBox = document.getElementById('wifiKeyBox');
                 const sync = () => {
                     box.style.display = type.value === 'bridge' ? '' : 'none';
+                    document.getElementById('pppoeHotspotBox').style.display = type.value === 'pppoe' ? '' : 'none';
                     keyBox.style.display = document.querySelector('[name=wifi_security]:checked')?.value === 'password' ? '' : 'none';
                 };
                 type.addEventListener('change', sync);
