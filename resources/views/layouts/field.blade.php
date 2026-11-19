@@ -72,6 +72,7 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script src="{{ asset('assets/app.js') }}"></script>
 <script src="{{ asset('snet/app.js') }}?v={{ filemtime(public_path('snet/app.js')) }}"></script>
+@include('partials.job-progress')
 @stack('scripts')
 </body>
 </html>

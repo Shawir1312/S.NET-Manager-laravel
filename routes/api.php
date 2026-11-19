@@ -24,6 +24,7 @@ Route::middleware(['auth:sanctum', 'active', 'throttle:api', 'genie.server'])->g
 
         Route::get('/{device}', [OntController::class, 'show'])->whereNumber('device')->name('show');
         Route::get('/{device}/parameters', [OntController::class, 'parameters'])->whereNumber('device')->name('parameters');
+        Route::get('/{device}/jobs', [ConfigurationController::class, 'deviceJobs'])->whereNumber('device')->name('jobs');
         Route::get('/{device}/capabilities', [OntController::class, 'capabilities'])->whereNumber('device')->name('capabilities');
         Route::post('/{device}/check-online', [OntController::class, 'checkOnline'])->whereNumber('device')->middleware('throttle:genieacs')->name('check-online');
         Route::post('/{device}/refresh', [OntController::class, 'refresh'])->whereNumber('device')->middleware('throttle:6,1')->name('refresh');

@@ -45,12 +45,15 @@
 <script>
 (() => {
     const $ = id => document.getElementById(id);
-    let timer = null, seq = 0;
+    let timer = null, seq = 0, server = null;
 
-    // Tombol jenis pelanggan membawa SN ke langkah berikutnya (?sn=...).
+    // Tombol jenis pelanggan membawa SN (dan server GenieACS tempat SN ditemukan) ke langkah berikutnya.
     function syncLinks() {
         const sn = $('snInput').value.trim().toUpperCase();
-        document.querySelectorAll('.js-go').forEach(a => { a.href = a.dataset.url + (sn ? '?sn=' + encodeURIComponent(sn) : ''); });
+        const q = new URLSearchParams();
+        if (sn) q.set('sn', sn);
+        if (sn && server) q.set('server', server);
+        document.querySelectorAll('.js-go').forEach(a => { a.href = a.dataset.url + (q.toString() ? '?' + q : ''); });
     }
 
     async function check() {
@@ -60,6 +63,8 @@
         try {
             const r = await OntApp.api(@json(route('api.ont.locate')), { method: 'POST', body: { serial_number: sn } });
             if (my !== seq) return;
+            server = (r.found.find(d => d.online) || r.found[0])?.server_id || null;
+            syncLinks();
             box.innerHTML = r.found.length === 0
                 ? '<span class="text-danger"><i class="bi bi-x-circle me-1"></i>SN tidak ditemukan di GenieACS mana pun. Cek SN atau pastikan ONT sudah terhubung ke ACS.</span>'
                 : r.found.map(d => `<div class="${d.online ? 'text-success' : 'text-warning'}"><i class="bi ${d.online ? 'bi-check-circle' : 'bi-exclamation-circle'} me-1"></i>`
@@ -67,7 +72,7 @@
         } catch (e) { if (my === seq) box.innerHTML = '<span class="text-danger">' + escHtml(e.message) + '</span>'; }
     }
 
-    $('snInput').addEventListener('input', () => { syncLinks(); clearTimeout(timer); timer = setTimeout(check, 700); });
+    $('snInput').addEventListener('input', () => { server = null; syncLinks(); clearTimeout(timer); timer = setTimeout(check, 700); });
     $('btnScan').addEventListener('click', () => SnScan.start($('scanBox'), 'qrReader', (decoded, c) => { $('snInput').value = c[0] || decoded.trim(); syncLinks(); check(); }));
     $('btnStopScan').addEventListener('click', () => SnScan.stop($('scanBox')));
 })();

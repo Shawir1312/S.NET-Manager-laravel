@@ -74,6 +74,19 @@ class ConfigurationController extends Controller
         return response()->json(['id' => $job->uuid, 'status' => $job->fresh()->status->value, 'is_simulation' => $job->is_simulation], 202);
     }
 
+    /** GET /api/ont/{device}/jobs?after_id= — job baru di ONT ini (untuk pop-up progres, mis. hotspot yang diantrekan). */
+    public function deviceJobs(Request $request, OntDevice $device): JsonResponse
+    {
+        $jobs = ConfigurationJob::where('ont_device_id', $device->id)->where('id', '>', $request->integer('after_id'))
+            ->orderBy('id')->limit(5)->get()->filter(fn (ConfigurationJob $job) => $request->user()->can('view', $job));
+
+        return response()->json($jobs->map(fn (ConfigurationJob $job) => [
+            'label' => $job->service_type->label().' · '.$device->serial_number,
+            'status_url' => route('api.configuration.status', $job->uuid),
+            'history_url' => route('history.show', $job->uuid),
+        ])->values());
+    }
+
     /** GET /api/configuration/{job}/status */
     public function status(ConfigurationJob $job): JsonResponse
     {

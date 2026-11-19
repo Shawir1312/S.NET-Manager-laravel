@@ -159,6 +159,25 @@ class CustomerController extends Controller
         return back()->with('status', "Akun portal {$customer->full_name} disimpan.{$note}");
     }
 
+    /**
+     * Data pop-up progres untuk job PPPoE (+ hotspot yang menyusul bila template PPPoE punya seksi Hotspot).
+     *
+     * @return array<string, mixed>|null
+     */
+    private static function progressFor(?ConfigurationJob $job): ?array
+    {
+        if (! $job) {
+            return null;
+        }
+        $template = $job->service_type === ServiceType::Pppoe && $job->configuration_template_id ? ConfigurationTemplate::find($job->configuration_template_id) : null;
+
+        return [
+            'jobs' => [['label' => $job->service_type->label().' · '.$job->device?->serial_number, 'status_url' => route('api.configuration.status', $job->uuid), 'history_url' => route('history.show', $job->uuid)]],
+            'deviceJobsUrl' => route('api.ont.jobs', ['device' => $job->ont_device_id, 'after_id' => $job->id]),
+            'expect' => $template?->hotspotPart() ? 2 : 1,
+        ];
+    }
+
     /** Langkah awal tambah pelanggan: SN dulu, lalu pilih jenis (rumahan / hotspot). */
     public function add(): View
     {
@@ -190,9 +209,10 @@ class CustomerController extends Controller
             return back()->withInput()->withErrors(['router_id' => $e->getMessage()]);
         }
 
-        // Dari aplikasi lapangan: kembali ke beranda lapangan, bukan halaman admin.
+        // Dari aplikasi lapangan: kembali ke beranda lapangan, bukan halaman admin. Progres setting ONT tampil sebagai pop-up.
         return ($request->boolean('from_field') ? redirect()->route('field.home') : redirect()->route('customers.show', $r['customer']))
-            ->with('status', implode(' ', $r['notes']));
+            ->with('status', implode(' ', $r['notes']))
+            ->with('job_progress', self::progressFor($r['job']));
     }
 
     public function show(PppoeCustomer $customer): View
@@ -281,15 +301,16 @@ class CustomerController extends Controller
                 $device = $ont->findDevice($customer);
                 $template = $ont->templateFor($customer, ServiceType::Bridge, $d['hotspot_template_id'] ?? null);
                 $warnings = array_filter([$ont->tagWithName($device, $customer)]);
-                $provisioning->start($device, $ont->buildInput($customer, $template, null), $request->user(), $template->id);
+                $job = $provisioning->start($device, $ont->buildInput($customer, $template, null), $request->user(), $template->id);
             } else {
-                $warnings = $ont->push($customer, $request->user(), $radius->passwordOf($customer->pppoe_username), $d['pppoe_template_id'] ?? null)['warnings'];
+                ['job' => $job, 'warnings' => $warnings] = $ont->push($customer, $request->user(), $radius->passwordOf($customer->pppoe_username), $d['pppoe_template_id'] ?? null);
             }
         } catch (ProvisioningException $e) {
             return back()->withErrors(['ont' => $e->getMessage()]);
         }
 
-        return back()->with('tab', 'ont')->with('status', trim('Konfigurasi ONT diantrekan. Status diperbarui otomatis di bawah. '.implode(' ', $warnings)));
+        return back()->with('tab', 'ont')->with('job_progress', self::progressFor($job))
+            ->with('status', trim('Konfigurasi ONT diantrekan. '.implode(' ', $warnings)));
     }
 
     /** @return array{push_ont: bool, pppoe_template_id: ?int} */

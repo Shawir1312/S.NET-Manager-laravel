@@ -135,6 +135,27 @@ class CustomerTest extends TestCase
         $this->actingAs($this->operator)->get('/lapangan/pelanggan/baru?sn=HWTC79FC699D')->assertOk()->assertSee('value="HWTC79FC699D"', false);
     }
 
+    public function test_new_customer_opens_realtime_progress_popup_for_pppoe_and_hotspot_jobs(): void
+    {
+        (new StatefulGenieAcs($this->fiberhomeDoc()))->fake();
+        $this->pppoeWithHotspot(300);
+
+        $res = $this->actingAs($this->operator)->post('/customers', $this->form(['push_ont' => 1]))->assertSessionHasNoErrors();
+        $progress = session('job_progress');
+        $pppoe = ConfigurationJob::orderBy('id')->firstOrFail();
+        $this->assertSame(2, $progress['expect'], 'PPPoE + hotspot dari template');
+        $this->assertSame(route('api.configuration.status', $pppoe->uuid), $progress['jobs'][0]['status_url']);
+
+        // Pop-up menemukan job hotspot yang menyusul lewat endpoint job per ONT.
+        $found = $this->actingAs($this->operator)->getJson($progress['deviceJobsUrl'])->assertOk()->json();
+        $this->assertCount(1, $found);
+        $this->assertStringStartsWith('Hotspot', $found[0]['label']);
+        $this->actingAs($this->operator)->get(route('customers.show', PppoeCustomer::firstOrFail()))->assertSee('JobProgress.open({', false);
+
+        // Teknisi lain tidak melihat job milik operator ini.
+        $this->actingAs(User::factory()->teknisi()->create())->getJson($progress['deviceJobsUrl'])->assertOk()->assertExactJson([]);
+    }
+
     public function test_push_tags_ont_with_customer_name_replacing_old_tags(): void
     {
         $doc = $this->fiberhomeDoc();

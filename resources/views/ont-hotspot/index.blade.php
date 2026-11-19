@@ -22,6 +22,11 @@
         <div class="card shadow-sm mb-4">
             <div class="card-header"><h5 class="card-title"><span class="badge bg-primary rounded-circle me-2">1</span>Serial Number ONT</h5></div>
             <div class="card-body">
+                <div id="snSummary" class="align-items-center gap-2 flex-wrap" style="display:none;">
+                    <span class="text-body-secondary">SN:</span><span class="font-mono fw-bold fs-5" id="snSummaryValue"></span>
+                    <button type="button" class="btn btn-sm btn-link" id="btnChangeSn">Ganti SN</button>
+                </div>
+                <div id="snEntry">
                 @if ($servers->count() > 1)
                 <div class="mb-3">
                     <label class="form-label">Server GenieACS</label>
@@ -40,6 +45,7 @@
                     <div id="qrReader" class="rounded overflow-hidden border" style="width:100%; max-width:420px; margin:0 auto;"></div>
                     <div class="text-center mt-2"><button class="btn btn-sm btn-outline-danger" type="button" id="btnStopScan"><i class="bi bi-x-circle me-1"></i>Tutup Kamera</button></div>
                     <div class="form-text text-center">Arahkan kamera ke QR code atau barcode SN di label ONT. Kamera butuh HTTPS &amp; izin browser.</div>
+                </div>
                 </div>
                 <div id="scanRaw" class="small text-muted mt-2 text-break"></div>
                 <div id="searchResult" class="mt-3"></div>
@@ -74,10 +80,6 @@
         <div class="card shadow-sm mb-4" id="deviceCard" style="display:none;">
             <div class="card-header"><h5 class="card-title"><i class="bi bi-router me-1"></i>Status ONT</h5></div>
             <div class="card-body" id="deviceBody"></div>
-        </div>
-        <div class="card shadow-sm" id="progressCard" style="display:none;">
-            <div class="card-header"><h5 class="card-title"><i class="bi bi-activity me-1"></i>Progres Konfigurasi</h5></div>
-            <div class="card-body" id="progressBody"></div>
         </div>
         <div class="card border-0 bg-light">
             <div class="card-body small text-muted">
@@ -153,7 +155,6 @@
         const list = Array.isArray(candidates) && candidates.length ? candidates : [hexToPon(typed) || typed];
         if (list[0].length < 6) { OntApp.toast('Isi SN ONT terlebih dahulu.', 'warning'); return; }
         if (!Array.isArray(candidates)) $('scanRaw').textContent = '';
-        $('progressCard').style.display = 'none';
         try {
             let r = null;
             for (const sn of list) {
@@ -216,33 +217,30 @@
         }
     }
 
-    async function pollStatus(job) {
-        $('progressCard').style.display = '';
-        const link = `<a href="${job.history_url}" class="small">Lihat detail di Riwayat Config ONT</a>`;
-        const tick = async () => {
-            try {
-                const s = await OntApp.api(job.status_url);
-                const steps = (s.timeline || []).map(t => `<li class="small"><span class="text-muted">${escHtml((t.at || '').substring(11, 19))}</span> ${escHtml(t.message || t.event)}</li>`).join('');
-                $('progressBody').innerHTML = `<div class="mb-2"><span class="badge bg-${escHtml(s.badge)}">${escHtml(s.label)}</span>${s.is_simulation ? ' <span class="badge bg-warning text-dark">SIMULASI</span>' : ''}</div>
-                    ${s.error_message ? alertBox('danger', escHtml(s.error_message)) : ''}<ul class="ps-3 mb-2">${steps}</ul>${link}`;
-                if (s.final) {
-                    const btn = $('btnApply');
-                    btn.disabled = false;
-                    btn.innerHTML = '<i class="bi bi-send-check me-1"></i> Terapkan ke ONT';
-                    OntApp.toast(s.status === 'success' ? 'Konfigurasi hotspot berhasil diterapkan.' : 'Konfigurasi selesai dengan status: ' + s.label, s.status === 'success' ? 'success' : 'warning');
-                    return;
-                }
-            } catch (e) { /* coba lagi */ }
-            setTimeout(tick, 2500);
-        };
-        tick();
+    function pollStatus(job) {
+        JobProgress.open({ jobs: [{ status_url: job.status_url, history_url: job.history_url, label: 'Hotspot · ' + (device?.serial_number || '') }], onDone: states => {
+            const btn = $('btnApply');
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-send-check me-1"></i> Terapkan ke ONT';
+            const s = states[0] || {};
+            OntApp.toast(s.status === 'success' ? 'Konfigurasi hotspot berhasil diterapkan.' : 'Konfigurasi selesai dengan status: ' + (s.label || '-'), s.status === 'success' ? 'success' : 'warning');
+        } });
     }
 
     $('btnScan').addEventListener('click', startScan);
     $('btnStopScan').addEventListener('click', stopScan);
     // "Coba lagi" dari beranda lapangan: ?sn=... langsung dicari.
-    const presetSn = new URLSearchParams(location.search).get('sn');
-    if (presetSn) { $('snInput').value = presetSn; search(); }
+    // Dari Tambah Pelanggan / "Coba lagi": SN sudah diisi -> langkah SN diringkas, ONT langsung dicari.
+    const params = new URLSearchParams(location.search), presetSn = params.get('sn');
+    if (presetSn) {
+        if ($('serverSelect') && params.get('server')) $('serverSelect').value = params.get('server');
+        $('snInput').value = presetSn;
+        $('snEntry').style.display = 'none';
+        $('snSummary').style.display = 'flex';
+        $('snSummaryValue').textContent = presetSn.toUpperCase();
+        $('btnChangeSn').addEventListener('click', () => { $('snEntry').style.display = ''; $('snSummary').style.display = 'none'; $('snInput').focus(); });
+        search();
+    }
     $('btnSearch').addEventListener('click', () => search());
     $('snInput').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); search(); } });
     $('btnApply').addEventListener('click', apply);

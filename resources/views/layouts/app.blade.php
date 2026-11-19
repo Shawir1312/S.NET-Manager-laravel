@@ -115,6 +115,7 @@
 {{-- OntApp (api/toast/konfirmasi hapus) dimuat sebelum JS S.NET agar konfirmasi hapus menahan loader. --}}
 <script src="{{ asset('assets/app.js') }}"></script>
 <script src="{{ asset('snet/app.js') }}?v={{ filemtime(public_path('snet/app.js')) }}"></script>
+@include('partials.job-progress')
 @stack('scripts')
 </body>
 </html>
