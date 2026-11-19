@@ -16,12 +16,12 @@ class PppoeCustomer extends Model
     protected $table = 'pppoe_customers';
 
     /** @var list<string> */
-    protected $fillable = ['router_id', 'pppoe_username', 'portal_username', 'portal_password', 'full_name', 'phone', 'address', 'profile', 'monthly_price', 'is_free', 'due_day', 'status', 'ont_sn', 'ont_vlan', 'ont_wifi_ssid', 'ont_wifi_pass', 'isolated_at', 'isolated_reason', 'last_paid_at', 'last_paid_amount', 'notes', 'created_by'];
+    protected $fillable = ['router_id', 'pppoe_username', 'portal_username', 'portal_password', 'full_name', 'phone', 'address', 'profile', 'monthly_price', 'is_free', 'due_day', 'status', 'ont_sn', 'ont_vlan', 'ont_wifi_ssid', 'ont_wifi_pass', 'isolated_at', 'isolated_reason', 'last_paid_at', 'last_paid_amount', 'notes', 'created_by', 'odp_id', 'latitude', 'longitude'];
 
     /** @return array<string, string> */
     protected function casts(): array
     {
-        return ['portal_password' => 'hashed', 'ont_wifi_pass' => 'encrypted', 'is_free' => 'boolean', 'isolated_at' => 'datetime', 'last_paid_at' => 'date'];
+        return ['portal_password' => 'hashed', 'ont_wifi_pass' => 'encrypted', 'is_free' => 'boolean', 'isolated_at' => 'datetime', 'last_paid_at' => 'date', 'latitude' => 'float', 'longitude' => 'float'];
     }
 
     /** @var list<string> */
@@ -30,6 +30,11 @@ class PppoeCustomer extends Model
     public function router(): BelongsTo
     {
         return $this->belongsTo(Router::class);
+    }
+
+    public function odp(): BelongsTo
+    {
+        return $this->belongsTo(Odp::class);
     }
 
     public function payments(): HasMany

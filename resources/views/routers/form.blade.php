@@ -62,6 +62,7 @@
                     <label class="form-label">Lokasi / Keterangan</label>
                     <input type="text" class="form-control" name="location" value="{{ old('location', $router->location) }}" placeholder="Contoh: Gedung A Lantai 2">
                 </div>
+                @include('partials.geo-fields', ['lat' => $router->latitude, 'lng' => $router->longitude])
 
                 @if ($genieServers->count() > 1)
                 <div class="col-md-6">

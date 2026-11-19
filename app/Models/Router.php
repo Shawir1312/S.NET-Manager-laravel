@@ -16,16 +16,21 @@ class Router extends Model
     protected $table = 'routers';
 
     /** @var list<string> */
-    protected $fillable = ['name', 'ip_address', 'nas_id', 'nas_ip', 'api_user', 'api_password', 'api_port', 'radius_secret', 'location', 'status', 'genie_acs_setting_id', 'default_vlan', 'pppoe_template_id', 'hotspot_template_id', 'last_seen'];
+    protected $fillable = ['name', 'ip_address', 'nas_id', 'nas_ip', 'api_user', 'api_password', 'api_port', 'radius_secret', 'location', 'status', 'genie_acs_setting_id', 'default_vlan', 'pppoe_template_id', 'hotspot_template_id', 'last_seen', 'latitude', 'longitude'];
 
     /** @return array<string, string> */
     protected function casts(): array
     {
-        return ['api_password' => 'encrypted', 'last_seen' => 'datetime'];
+        return ['api_password' => 'encrypted', 'last_seen' => 'datetime', 'latitude' => 'float', 'longitude' => 'float'];
     }
 
     /** @var list<string> */
     protected $hidden = ['api_password', 'radius_secret'];
+
+    public function odps(): HasMany
+    {
+        return $this->hasMany(Odp::class);
+    }
 
     public function genieAcsSetting(): BelongsTo
     {

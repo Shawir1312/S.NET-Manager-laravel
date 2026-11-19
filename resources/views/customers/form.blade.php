@@ -17,6 +17,11 @@
                 <div class="col-md-6 field-hide"><label class="form-label">Status</label><select class="form-select" name="status">
                     @foreach (['active' => 'Aktif', 'isolated' => 'Isolir', 'suspended' => 'Suspend'] as $v => $l)<option value="{{ $v }}" @selected(old('status', $customer->status) === $v)>{{ $l }}</option>@endforeach</select></div>
                 <div class="col-12"><label class="form-label">Alamat</label><textarea class="form-control" name="address" rows="2">{{ old('address', $customer->address) }}</textarea></div>
+                <div class="col-12"><label class="form-label">ODP</label><select class="form-select" name="odp_id" id="odpId">
+                    <option value="">— belum / tanpa ODP —</option>
+                    @foreach ($odps as $o)<option value="{{ $o->id }}" data-router="{{ $o->router_id }}" @selected((int) old('odp_id', $customer->odp_id) === $o->id)>{{ $o->name }}</option>@endforeach
+                </select><div class="form-text">Untuk garis pelanggan → ODP → server di Peta Jaringan.</div></div>
+                @include('partials.geo-fields', ['lat' => $customer->latitude, 'lng' => $customer->longitude])
                 <div class="col-12 field-hide"><label class="form-label">Catatan</label><textarea class="form-control" name="notes" rows="2" placeholder="Port ODP, teknisi, dll.">{{ old('notes', $customer->notes) }}</textarea></div>
             </div></div>
         </div>
@@ -104,6 +109,9 @@
     const price = $('price');
     const syncFree = () => { price.readOnly = $('isFree').checked; if ($('isFree').checked) price.value = 0; };
     $('isFree').addEventListener('change', syncFree); syncFree();
+    // ODP hanya dari router/cabang yang dipilih.
+    const syncOdp = () => { const r = $('routerId').value; $('odpId').querySelectorAll('option[data-router]').forEach(o => { o.hidden = o.dataset.router !== r; if (o.hidden && o.selected) $('odpId').value = ''; }); };
+    $('routerId').addEventListener('change', syncOdp); syncOdp();
     $('btnRandom').addEventListener('click', () => { $('pppoePass').value = String(Math.floor(10000000 + Math.random() * 90000000)); });
     if (!isEdit) {
         // Username otomatis dari nama, sama seperti S.NET lama: "budisantoso@snet".

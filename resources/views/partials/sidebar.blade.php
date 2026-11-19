@@ -34,6 +34,7 @@
             ['Paket Hotspot', 'bi-collection', 'hotspot-profiles.index', 'manage-settings', [], 'hotspot-profiles.*'],
         ],
         'Jaringan' => [
+            ['Peta Jaringan', 'bi-map', 'map.index', 'operate', [], 'map.*'],
             ['Router / NAS', 'bi-router', 'routers.index', 'manage-settings', [], 'routers.*'],
             ['VPN WireGuard', 'bi-shield-lock', 'wireguard.index', 'manage-settings', [], 'wireguard.*'],
         ],

@@ -244,6 +244,9 @@ class CustomerService
             'ont_vlan' => (int) ($data['ont_vlan'] ?? 0), // 0 = ikut VLAN PPPoE di template
             'ont_wifi_ssid' => $data['ont_wifi_ssid'] ?? '',
             'notes' => $data['notes'] ?? null,
+            'odp_id' => $data['odp_id'] ?? null,
+            'latitude' => $data['latitude'] ?? null,
+            'longitude' => $data['longitude'] ?? null,
         ] + (filled($data['ont_wifi_pass'] ?? null) ? ['ont_wifi_pass' => $data['ont_wifi_pass']] : []);
     }
 

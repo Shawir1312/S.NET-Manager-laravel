@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Enums\ServiceType;
 use App\Models\ConfigurationJob;
 use App\Models\ConfigurationTemplate;
+use App\Models\Odp;
 use App\Models\OntDevice;
 use App\Models\PppoeCustomer;
 use App\Models\PppoePayment;
@@ -337,6 +338,7 @@ class CustomerController extends Controller
             'routers' => Router::orderBy('name')->get(['id', 'name']),
             'profiles' => $profiles,
             'templates' => ConfigurationTemplate::orderBy('name')->get(['id', 'name', 'service_type', 'is_default', 'payload']),
+            'odps' => Odp::orderBy('name')->get(['id', 'name', 'router_id']),
         ];
     }
 
@@ -365,6 +367,9 @@ class CustomerController extends Controller
             'ont_vlan' => ['nullable', 'integer', 'between:1,4094'],
             'ont_wifi_ssid' => ['nullable', 'string', 'max:32'],
             'ont_wifi_pass' => ['nullable', 'string', 'min:8', 'max:63'],
+            'odp_id' => ['nullable', Rule::exists('odps', 'id')->where('router_id', $request->integer('router_id'))],
+            'latitude' => ['nullable', 'numeric', 'between:-90,90'],
+            'longitude' => ['nullable', 'numeric', 'between:-180,180'],
         ], [], ['ont_wifi_pass' => 'password WiFi', 'ont_sn' => 'SN ONT']);
     }
 }

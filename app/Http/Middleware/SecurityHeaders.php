@@ -20,7 +20,9 @@ class SecurityHeaders
         $response->headers->set('Referrer-Policy', 'same-origin');
         // Kamera hanya diizinkan (untuk domain sendiri) di halaman yang punya scan SN ONT; halaman lain tetap diblokir.
         $camera = $request->routeIs('ont-hotspot.index', 'field.hotspot', 'field.customers.create', 'customers.create', 'customers.edit', 'customers.add', 'field.add') ? 'camera=(self)' : 'camera=()';
-        $response->headers->set('Permissions-Policy', "{$camera}, microphone=(), geolocation=()");
+        // GPS hanya di form pelanggan/router (tombol "Lokasi saya").
+        $geo = $request->routeIs('customers.create', 'customers.edit', 'field.customers.create', 'routers.create', 'routers.edit') ? 'geolocation=(self)' : 'geolocation=()';
+        $response->headers->set('Permissions-Policy', "{$camera}, microphone=(), {$geo}");
 
         return $response;
     }

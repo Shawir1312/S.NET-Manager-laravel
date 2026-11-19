@@ -143,6 +143,8 @@ class RouterController extends Controller
             'api_port' => ['required', 'integer', 'between:1,65535'],
             'radius_secret' => ['required', 'string', 'max:60'],
             'location' => ['nullable', 'string', 'max:500'],
+            'latitude' => ['nullable', 'numeric', 'between:-90,90'],
+            'longitude' => ['nullable', 'numeric', 'between:-180,180'],
             'status' => ['required', 'in:active,inactive'],
             'genie_acs_setting_id' => ['nullable', 'exists:genieacs_settings,id'],
         ]);
