@@ -85,6 +85,27 @@ class DeviceModelController extends Controller
         return back()->with('status', "Mapping {$d['key']} disimpan.");
     }
 
+    /** Simpan semua centang "verified" sekaligus; hanya baris yang berubah yang disentuh (level path/write tetap). */
+    public function saveVerified(Request $request, OntModel $model): RedirectResponse
+    {
+        Gate::authorize('manage-models');
+        $ids = array_map('intval', $request->validate(['verified_ids' => ['array'], 'verified_ids.*' => ['integer']])['verified_ids'] ?? []);
+        $changed = [];
+        foreach ($model->parameterMappings()->get() as $mapping) {
+            $verified = in_array($mapping->id, $ids, true);
+            if ($verified === (bool) $mapping->verified) {
+                continue;
+            }
+            $mapping->update($verified
+                ? ['verified' => true, 'verification_level' => 'manual', 'verified_at' => now(), 'source' => 'Ditandai verified manual oleh '.$request->user()->name]
+                : ['verified' => false, 'verification_level' => null, 'verified_at' => null]);
+            $changed[] = ($verified ? '+' : '-').$mapping->key;
+        }
+        $this->audit->log('model.mappings_verified', $model, ['changed' => $changed]);
+
+        return back()->with('status', $changed === [] ? 'Tidak ada perubahan centang.' : count($changed).' mapping diperbarui.');
+    }
+
     public function deleteMapping(OntModel $model, OntParameterMapping $mapping): RedirectResponse
     {
         Gate::authorize('manage-models');

@@ -41,7 +41,11 @@
 
 @if ($model->exists)
 <div class="card">
-    <div class="card-header">Mapping Parameter ({{ $model->parameterMappings->count() }})</div>
+    <div class="card-header d-flex flex-wrap align-items-center gap-2">
+        <span class="me-auto">Mapping Parameter ({{ $model->parameterMappings->count() }})</span>
+        <button type="button" class="btn btn-sm btn-outline-secondary" id="checkAllVerified"><i class="bi bi-check2-all"></i> Centang semua</button>
+        <button class="btn btn-sm btn-primary" form="verifiedForm"><i class="bi bi-save"></i> Simpan centang verified</button>
+    </div>
     <div class="card-body border-bottom small text-body-secondary">
         Placeholder: <code>{wcd}</code> WANConnectionDevice, <code>{i}</code> instance WAN, <code>{ssid}</code> WLANConfiguration.
         Verifikasi otomatis: <span class="badge text-bg-info">path</span> = path ditemukan saat ONT dicari,
@@ -57,7 +61,8 @@
                 <td class="font-monospace">{{ $m->key }}<input type="hidden" name="key" value="{{ $m->key }}" form="map{{ $m->id }}"></td>
                 <td><input class="form-control form-control-sm font-monospace" name="path_template" value="{{ $m->path_template }}" form="map{{ $m->id }}" aria-label="path {{ $m->key }}"></td>
                 <td><select class="form-select form-select-sm" name="value_type" form="map{{ $m->id }}" aria-label="tipe {{ $m->key }}">@foreach (['xsd:string','xsd:boolean','xsd:unsignedInt','xsd:int','xsd:dateTime'] as $t)<option @selected($m->value_type === $t)>{{ $t }}</option>@endforeach</select></td>
-                <td class="text-nowrap"><input class="form-check-input" type="checkbox" name="verified" value="1" @checked($m->verified) form="map{{ $m->id }}" aria-label="verified {{ $m->key }}">
+                <td class="text-nowrap"><input type="hidden" name="verified" value="{{ $m->verified ? 1 : 0 }}" form="map{{ $m->id }}">
+                    <input class="form-check-input js-verified" type="checkbox" name="verified_ids[]" value="{{ $m->id }}" @checked($m->verified) form="verifiedForm" aria-label="verified {{ $m->key }}">
                     @if ($m->verified)<span class="badge text-bg-{{ ['write' => 'success', 'path' => 'info', 'manual' => 'secondary'][$m->verification_level] ?? 'secondary' }}" title="{{ $m->verified_device }}">{{ $m->verification_level ?? 'manual' }}</span>@endif</td>
                 <td class="text-body-secondary" style="max-width:16rem">{{ $m->source }}</td>
                 <td class="text-nowrap">
@@ -82,5 +87,9 @@
     <form id="del{{ $m->id }}" class="confirm-delete" method="POST" action="{{ route('models.mappings.delete', [$model, $m]) }}">@csrf @method('DELETE')</form>
 @endforeach
 <form id="mapNew" method="POST" action="{{ route('models.mappings.save', $model) }}">@csrf</form>
+<form id="verifiedForm" method="POST" action="{{ route('models.mappings.verified', $model) }}">@csrf</form>
+<script>
+    document.getElementById('checkAllVerified').addEventListener('click', () => document.querySelectorAll('.js-verified').forEach(c => { c.checked = true; }));
+</script>
 @endif
 @endsection

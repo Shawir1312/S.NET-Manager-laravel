@@ -54,6 +54,7 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::get('/models/{model}/edit', [DeviceModelController::class, 'edit'])->name('models.edit');
         Route::put('/models/{model}', [DeviceModelController::class, 'update'])->name('models.update');
         Route::post('/models/{model}/mappings', [DeviceModelController::class, 'saveMapping'])->name('models.mappings.save');
+        Route::post('/models/{model}/mappings/verified', [DeviceModelController::class, 'saveVerified'])->name('models.mappings.verified');
         Route::delete('/models/{model}/mappings/{mapping}', [DeviceModelController::class, 'deleteMapping'])->name('models.mappings.delete');
 
         Route::resource('users', UserController::class)->except('show');

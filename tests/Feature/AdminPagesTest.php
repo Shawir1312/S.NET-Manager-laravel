@@ -78,6 +78,25 @@ class AdminPagesTest extends TestCase
         $this->assertDatabaseMissing('configuration_templates', ['name' => 'BENTROK']);
     }
 
+    public function test_model_mappings_verified_saved_in_one_submit(): void
+    {
+        $model = OntModel::where('product_class', 'HS8145C5')->firstOrFail();
+        [$a, $b] = $model->parameterMappings()->orderBy('id')->take(2)->get()->all();
+        $a->update(['verified' => true, 'verification_level' => 'path']);
+
+        $this->actingAs($this->admin)->get("/models/{$model->id}/edit")->assertOk()->assertSee('Simpan centang verified');
+        // Centang b, a tetap tercentang -> a tidak disentuh (level path tetap), b jadi manual, sisanya tetap belum.
+        $this->actingAs($this->admin)->post("/models/{$model->id}/mappings/verified", ['verified_ids' => [$a->id, $b->id]])->assertRedirect();
+
+        $this->assertSame('path', $a->fresh()->verification_level);
+        $this->assertTrue($b->fresh()->verified);
+        $this->assertSame('manual', $b->fresh()->verification_level);
+        $this->assertSame(2, $model->parameterMappings()->where('verified', true)->count());
+
+        $this->actingAs($this->admin)->post("/models/{$model->id}/mappings/verified", ['verified_ids' => [$a->id]]);
+        $this->assertFalse($b->fresh()->verified, 'centang dilepas = tidak verified');
+    }
+
     public function test_user_management_guards(): void
     {
         $this->actingAs($this->admin)->post('/users', [
