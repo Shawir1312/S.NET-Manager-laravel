@@ -100,20 +100,24 @@ class HotspotOntSetup
     }
 
     /**
-     * Pasang nama sebagai tag ONT di GenieACS; tag lama yang dulu dipasang dari menu ini diganti.
-     * Tag lain (mis. untuk preset GenieACS) tidak disentuh.
+     * Pasang nama sebagai tag/komentar ONT di GenieACS. Setiap push baru, semua tag lama di ONT dihapus
+     * lalu diganti tag baru, sehingga komentar ONT selalu nama pemilik terakhir.
      */
     public function tagDevice(OntDevice $device, string $name): void
     {
         $tag = self::cleanName($name);
         $acs = GenieACSService::forDevice($device);
-        $old = $device->parameters_snapshot['acs_tag'] ?? null;
-        if ($old && $old !== $tag) {
-            rescue(fn () => $acs->removeTag($device->genieacs_id, $old), report: false);
+        $current = array_filter((array) ($acs->getDeviceDetails($device->genieacs_id)->raw()['_tags'] ?? []), 'is_string');
+        foreach ($current as $old) {
+            if ($old !== $tag) {
+                $acs->removeTag($device->genieacs_id, $old);
+            }
         }
-        $acs->addTag($device->genieacs_id, $tag);
+        if (! in_array($tag, $current, true)) {
+            $acs->addTag($device->genieacs_id, $tag);
+        }
         $snapshot = (array) $device->parameters_snapshot;
-        $snapshot['tags'] = array_values(array_unique([$tag, ...array_diff($snapshot['tags'] ?? [], array_filter([$old]))]));
+        $snapshot['tags'] = [$tag];
         $snapshot['acs_tag'] = $tag;
         $device->forceFill(['parameters_snapshot' => $snapshot])->save();
     }

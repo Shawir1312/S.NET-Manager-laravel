@@ -44,4 +44,15 @@ final class ONTValidator
 
         return in_array($n, $ctx->tree->instances($object), true) || $ctx->isPlanned($object, $n);
     }
+
+    /**
+     * Nomor SSID tertinggi yang boleh dipakai/dibuat: ONT dual-band (sudah punya salah satu SSID 5-8, radio 5 GHz)
+     * = 8; ONT single-band (hanya SSID 1-4, 2.4 GHz) = 4. 0 bila data WLAN belum terbaca.
+     */
+    public static function maxWlanIndex(DeviceContext $ctx): int
+    {
+        $existing = $ctx->tree->instances($ctx->root().'.LANDevice.1.WLANConfiguration');
+
+        return $existing === [] ? 0 : (max($existing) >= 5 ? 8 : 4);
+    }
 }

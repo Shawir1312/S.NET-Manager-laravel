@@ -315,4 +315,22 @@ class ProvisioningTest extends TestCase
         $this->assertStringContainsString('ONT membuat SSID 6', $status['error_message']);
         $this->assertSame(['1', '5'], array_map('strval', array_values(array_filter(array_keys($sim->doc['InternetGatewayDevice']['LANDevice']['1']['WLANConfiguration']), 'is_numeric'))), 'SSID salah nomor dihapus lagi');
     }
+
+    public function test_intermediate_ssids_created_on_the_way_are_removed(): void
+    {
+        $this->enableProduction();
+        $doc = $this->fiberhomeDoc();
+        foreach (range(2, 8) as $n) {
+            unset($doc['InternetGatewayDevice']['LANDevice']['1']['WLANConfiguration'][$n]);
+        }
+        $sim = (new StatefulGenieAcs($doc))->fake(); // ONT memberi nomor berurutan: 2, 3, lalu 4
+
+        $input = $this->input(['ssids' => [['index' => 4, 'ssid_name' => 'S.NET', 'security' => 'None', 'password' => null, 'enabled' => true]], 'binding' => ['lan' => [1], 'wlan' => [4]]]);
+        $id = $this->actingAs($this->tech)->postJson('/api/ont/configure', $input)->assertStatus(202)->json('id');
+        $status = $this->actingAs($this->tech)->getJson("/api/configuration/{$id}/status")->json();
+
+        $this->assertSame('success', $status['status'], json_encode($status['timeline']));
+        $wlan = $sim->doc['InternetGatewayDevice']['LANDevice']['1']['WLANConfiguration'];
+        $this->assertSame(['1', '4'], array_map('strval', array_values(array_filter(array_keys($wlan), 'is_numeric'))), 'SSID 2 & 3 perantara dihapus lagi');
+    }
 }

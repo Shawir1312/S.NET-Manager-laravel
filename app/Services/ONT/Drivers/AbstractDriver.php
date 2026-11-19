@@ -166,13 +166,14 @@ abstract class AbstractDriver implements ONTInterface
     {
         $object = $ctx->root().'.LANDevice.1.WLANConfiguration';
         $existing = $ctx->tree->instances($object);
-        if ($existing === []) {
+        $max = ONTValidator::maxWlanIndex($ctx); // single-band: SSID 1-4 saja, dual-band: 1-8
+        if ($max === 0) {
             return; // ONT tanpa WLAN (atau data WLAN belum terbaca) — biarkan validasi biasa yang melapor.
         }
         $wanted = array_unique([...$req->binding['wlan'], ...array_column($req->ssids, 'index')]);
         sort($wanted);
         foreach ($wanted as $n) {
-            if ($n >= 1 && $n <= 8 && ! in_array($n, $existing, true)) {
+            if ($n >= 1 && $n <= $max && ! in_array($n, $existing, true)) {
                 $plan->ensureInstance($object, $n, "Menambah SSID {$n} di ONT (AddObject, default belum ada)");
                 $ctx->planInstance($object, $n);
             }

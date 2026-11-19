@@ -2,10 +2,12 @@
 
 namespace Tests\Feature;
 
+use App\Enums\ModelSupportStatus;
 use App\Enums\ServiceType;
 use App\Models\ConfigurationJob;
 use App\Models\ConfigurationTemplate;
 use App\Models\OntDevice;
+use App\Models\OntModel;
 use App\Models\User;
 use App\Services\ONT\HotspotOntSetup;
 use Database\Seeders\OntModelSeeder;
@@ -78,11 +80,11 @@ class HotspotOntSetupTest extends TestCase
 
         $res = $this->actingAs($tech)->postJson('/ont-hotspot/apply', ['device_id' => $device->id, 'name' => 'Warung Ani'])
             ->assertStatus(202)->assertJsonPath('is_simulation', true)->assertJsonPath('warnings', []);
-        $this->assertSame(['PRESET-X', 'Warung Ani'], $acs->doc['_tags'], 'nama jadi tag ONT di GenieACS, tag lain tetap');
+        $this->assertSame(['Warung Ani'], $acs->doc['_tags'], 'nama jadi tag ONT di GenieACS; tag lama diganti');
 
-        // Ganti nama: tag lama dari menu ini diganti, tag preset tetap.
+        // Push baru dengan nama lain: semua tag lama diganti tag baru.
         $this->actingAs($tech)->postJson('/ont-hotspot/apply', ['device_id' => $device->id, 'name' => 'Toko Pak Budi'])->assertStatus(202);
-        $this->assertSame(['PRESET-X', 'Toko Pak Budi'], $acs->doc['_tags']);
+        $this->assertSame(['Toko Pak Budi'], $acs->doc['_tags']);
         $this->assertSame('Toko Pak Budi', $device->fresh()->parameters_snapshot['acs_tag']);
         $job = ConfigurationJob::where('uuid', $res->json('id'))->firstOrFail();
         $this->assertSame(ConfigurationTemplate::firstOrFail()->id, $job->configuration_template_id);
@@ -122,5 +124,37 @@ class HotspotOntSetupTest extends TestCase
         $this->assertNotSame('failed', $job->fresh()->status->value, (string) $job->fresh()->error_message);
         $payload = json_encode($job->plan);
         $this->assertStringContainsString('ensure_instance', $payload);
+    }
+
+    public function test_single_band_ont_uses_only_24ghz_ssid_from_template(): void
+    {
+        $this->seed(OntModelSeeder::class);
+        $this->useFakeAcsSetting();
+        config(['ontconfig.task_poll_interval_ms' => 0, 'ontconfig.task_timeout_seconds' => 1, 'ontconfig.provisioning_mode' => 'production']);
+        $model = OntModel::where('product_class', 'HG6145D2')->first();
+        $model->update(['status' => ModelSupportStatus::Supported]);
+        $model->parameterMappings()->update(['verified' => true]);
+        // ONT single-band: hanya SSID 1 (tanpa radio 5 GHz / SSID 5-8).
+        $doc = $this->fiberhomeDoc();
+        foreach (range(2, 8) as $n) {
+            unset($doc['InternetGatewayDevice']['LANDevice']['1']['WLANConfiguration'][$n]);
+        }
+        $acs = (new StatefulGenieAcs($doc))->fake();
+        $acs->addObjectNumbering = 'lowest';
+        $device = OntDevice::create(['genieacs_id' => '000AC2-HG6145D2-FHTT9D34CF80', 'serial_number' => 'FHTT9D34CF80']);
+        ConfigurationTemplate::create(['name' => 'VOUCHERAN', 'service_type' => ServiceType::Bridge, 'is_default' => true, 'payload' => [
+            'wan' => ['slot' => 'ip', 'vlan_id' => 300, 'service_list' => 'Other'], 'binding' => ['lan' => [1], 'wlan' => [2, 6]],
+            'ssids' => [['index' => 2, 'ssid_name' => 'S.NET'], ['index' => 6, 'ssid_name' => 'S.NET']], 'wifi' => ['security' => 'open'],
+        ]]);
+
+        $res = $this->actingAs(User::factory()->teknisi()->create())->postJson('/ont-hotspot/apply', ['device_id' => $device->id, 'name' => 'Warung Ani'])
+            ->assertStatus(202);
+
+        $this->assertSame(['Dilewati karena tidak ada di ONT ini: SSID 6 (5 GHz, ONT single-band).'], $res->json('warnings'));
+        $job = ConfigurationJob::where('uuid', $res->json('id'))->firstOrFail()->fresh();
+        $this->assertSame('success', $job->status->value, (string) $job->error_message);
+        $wlan = $acs->doc['InternetGatewayDevice']['LANDevice']['1']['WLANConfiguration'];
+        $this->assertSame(['1', '2'], array_map('strval', array_values(array_filter(array_keys($wlan), 'is_numeric'))), 'hanya SSID 2 yang dibuat');
+        $this->assertSame('S.NET', $wlan['2']['SSID']['_value'][0]);
     }
 }

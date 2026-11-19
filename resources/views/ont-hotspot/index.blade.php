@@ -54,7 +54,7 @@
                     <div class="col-md-7">
                         <label class="form-label">Nama Pemilik / Komentar ONT <span class="text-danger">*</span></label>
                         <input type="text" class="form-control" id="nameInput" maxlength="32" placeholder="Contoh: Warung Bu Ani">
-                        <div class="form-text">Disimpan sebagai tag/komentar ONT di GenieACS untuk menandai ONT ini milik siapa (juga tampil di Monitor ONT).</div>
+                        <div class="form-text">Disimpan sebagai tag/komentar ONT di GenieACS untuk menandai ONT ini milik siapa; tag lama di ONT diganti dengan nama ini (juga tampil di Monitor ONT).</div>
                     </div>
                     <div class="col-md-5">
                         <label class="form-label">Template Hotspot</label>

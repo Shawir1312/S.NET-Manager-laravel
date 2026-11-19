@@ -73,27 +73,29 @@ class ProvisioningService
         $tree = $this->acs($device)->getDeviceDetails($device->genieacs_id);
         $ctx = DeviceContext::build($device, $tree, $this->detector->detect($tree));
         $flagLimit = ($ctx->capability()?->binding_method ?? BindingMethod::Unknown) === BindingMethod::Flags ? 4 : PHP_INT_MAX;
-        // SSID 1-8 yang belum ada akan dibuat (AddObject) oleh mesin, jadi tidak dilewati; port LAN tidak bisa dibuat.
-        $hasWlan = $tree->instances($ctx->root().'.LANDevice.1.WLANConfiguration') !== [];
-        $exists = fn (string $type, int $n) => ONTValidator::interfaceExists($ctx, $type, $n) || ($type === 'wlan' && $hasWlan && $n >= 1 && $n <= 8);
+        // SSID yang belum ada akan dibuat (AddObject) oleh mesin, jadi tidak dilewati — kecuali SSID 5-8 (5 GHz)
+        // di ONT single-band: template "SSID 2 + 6" cukup memakai SSID 2. Port LAN tidak bisa dibuat.
+        $maxWlan = ONTValidator::maxWlanIndex($ctx);
+        $exists = fn (string $type, int $n) => ONTValidator::interfaceExists($ctx, $type, $n) || ($type === 'wlan' && $n >= 1 && $n <= $maxWlan);
         $skipped = [];
+        $label = fn (string $type, int $n) => $type === 'lan' ? "LAN {$n}" : ($maxWlan === 4 && $n >= 5 ? "SSID {$n} (5 GHz, ONT single-band)" : "SSID {$n}");
 
-        foreach (['lan' => 'LAN', 'wlan' => 'SSID'] as $type => $label) {
+        foreach (['lan', 'wlan'] as $type) {
             $keep = [];
             foreach ($input['binding'][$type] ?? [] as $n) {
                 if ($exists($type, (int) $n) && $n <= $flagLimit) {
                     $keep[] = (int) $n;
                 } else {
-                    $skipped[] = "{$label} {$n}";
+                    $skipped[] = $label($type, (int) $n);
                 }
             }
             $input['binding'][$type] = $keep;
         }
-        $input['ssids'] = array_values(array_filter($input['ssids'] ?? [], function (array $ssid) use ($exists, &$skipped) {
+        $input['ssids'] = array_values(array_filter($input['ssids'] ?? [], function (array $ssid) use ($exists, $label, &$skipped) {
             if ($exists('wlan', (int) $ssid['index'])) {
                 return true;
             }
-            $skipped[] = "SSID {$ssid['index']}";
+            $skipped[] = $label('wlan', (int) $ssid['index']);
 
             return false;
         }));
@@ -492,37 +494,56 @@ class ProvisioningService
     {
         $parent = $step['object'];
         $taskIds = [];
-        for ($attempt = 0; $attempt <= $step['index']; $attempt++) {
-            $acs->refreshDeviceParameters($id, $parent);
-            $before = $acs->getDeviceDetails($id)->instances($parent);
-            if (in_array($step['index'], $before, true)) {
-                $this->history($job, 'ensure_instance', 'success', "{$step['description']}: {$parent}.{$step['index']} siap.");
+        $created = []; // instance yang dibuat langkah ini (bisa ada perantara, mis. SSID 3 & 4 saat menuju SSID 6)
+        $removeCreated = function (array $paths) use ($acs, $id, $job): void {
+            foreach ($paths as $path) {
+                if (rescue(fn () => $acs->deleteObject($id, $path)['state'] === 'done', false, false)) {
+                    $job->backups()->where('parameter_path', $path)->where('new_value', '__created_object__')->delete();
+                    $this->history($job, 'delete_object', 'info', "Menghapus lagi {$path} (tidak dipakai).");
+                }
+            }
+        };
 
-                return $taskIds;
+        try {
+            for ($attempt = 0; $attempt <= $step['index']; $attempt++) {
+                $acs->refreshDeviceParameters($id, $parent);
+                $before = $acs->getDeviceDetails($id)->instances($parent);
+                if (in_array($step['index'], $before, true)) {
+                    // SSID perantara yang terbentuk sebelum target tidak diminta template → hapus lagi.
+                    $removeCreated(array_map(fn ($n) => "{$parent}.{$n}", array_diff($created, [$step['index']])));
+                    $this->history($job, 'ensure_instance', 'success', "{$step['description']}: {$parent}.{$step['index']} siap.");
+
+                    return $taskIds;
+                }
+
+                $r = $acs->addObject($id, $parent);
+                $taskIds[] = $r['task_id'];
+                $this->assertTask($job, $r, 'ADD_OBJECT_FAILED', 'AddObject '.$parent);
+                $acs->refreshDeviceParameters($id, $parent);
+                $new = array_values(array_diff($acs->getDeviceDetails($id)->instances($parent), $before));
+                if (count($new) !== 1) {
+                    throw new ProvisioningException("AddObject {$parent} gagal: instance baru tidak ditemukan.", 'ADD_OBJECT_FAILED');
+                }
+                if ($new[0] > $step['index']) {
+                    // Nomor ditentukan ONT. Jangan pakai SSID lain (bisa beda band) — hapus lagi lalu laporkan.
+                    $created[] = $new[0];
+                    throw new ProvisioningException("ONT membuat SSID {$new[0]} (bukan SSID {$step['index']}) saat menambah SSID, jadi dibatalkan dan dihapus lagi. "
+                        ."Tambahkan SSID {$step['index']} secara manual di ONT sekali, atau ubah template agar memakai SSID yang tersedia.", 'ADD_OBJECT_FAILED');
+                }
+                $created[] = $new[0];
+                ConfigurationBackup::create([
+                    'configuration_job_id' => $job->id, 'parameter_path' => "{$parent}.{$new[0]}",
+                    'old_value' => null, 'new_value' => '__created_object__', 'existed_before' => false, 'is_secret' => false, 'applied' => true,
+                ]);
+                $this->history($job, 'add_object', 'success', "Membuat {$parent}.{$new[0]} (AddObject)");
             }
 
-            $r = $acs->addObject($id, $parent);
-            $taskIds[] = $r['task_id'];
-            $this->assertTask($job, $r, 'ADD_OBJECT_FAILED', 'AddObject '.$parent);
-            $acs->refreshDeviceParameters($id, $parent);
-            $new = array_values(array_diff($acs->getDeviceDetails($id)->instances($parent), $before));
-            if (count($new) !== 1) {
-                throw new ProvisioningException("AddObject {$parent} gagal: instance baru tidak ditemukan.", 'ADD_OBJECT_FAILED');
-            }
-            if ($new[0] > $step['index']) {
-                // Nomor ditentukan ONT. Jangan pakai SSID lain (bisa beda band) — hapus lagi lalu laporkan.
-                rescue(fn () => $acs->deleteObject($id, "{$parent}.{$new[0]}"), report: false);
-                throw new ProvisioningException("ONT membuat SSID {$new[0]} (bukan SSID {$step['index']}) saat menambah SSID, jadi dibatalkan dan dihapus lagi. "
-                    ."Tambahkan SSID {$step['index']} secara manual di ONT sekali, atau ubah template agar memakai SSID yang tersedia.", 'ADD_OBJECT_FAILED');
-            }
-            ConfigurationBackup::create([
-                'configuration_job_id' => $job->id, 'parameter_path' => "{$parent}.{$new[0]}",
-                'old_value' => null, 'new_value' => '__created_object__', 'existed_before' => false, 'is_secret' => false, 'applied' => true,
-            ]);
-            $this->history($job, 'add_object', 'success', "Membuat {$parent}.{$new[0]} (AddObject)");
+            throw new ProvisioningException("SSID {$step['index']} tidak berhasil dibuat di ONT.", 'ADD_OBJECT_FAILED');
+        } catch (\Throwable $e) {
+            // Gagal (mis. ONT menolak karena batas jumlah SSID): jangan tinggalkan SSID setengah jadi.
+            $removeCreated(array_map(fn ($n) => "{$parent}.{$n}", $created));
+            throw $e;
         }
-
-        throw new ProvisioningException("SSID {$step['index']} tidak berhasil dibuat di ONT.", 'ADD_OBJECT_FAILED');
     }
 
     private function assertTask(ConfigurationJob $job, array $r, string $code, string $what): void
