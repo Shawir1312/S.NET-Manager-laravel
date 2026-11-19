@@ -284,6 +284,10 @@ class ProvisioningTest extends TestCase
         $preview = $this->actingAs($this->tech)->postJson("/api/ont/{$this->device->id}/preview", $input)->assertOk()->json();
         $this->assertSame([], $preview['errors']);
         $this->assertContains('ensure_instance', array_column($preview['steps'], 'type'));
+        // SSID baru dibuat & diatur sebelum WAN dibuat dan di-bind (FiberHome menolak urutan sebaliknya).
+        $types = array_column($preview['steps'], 'type');
+        $this->assertSame('ensure_instance', $types[0]);
+        $this->assertLessThan(array_search('add_object', $types, true), array_search('set_values', $types, true));
 
         $id = $this->actingAs($this->tech)->postJson('/api/ont/configure', $input)->assertStatus(202)->json('id');
         $status = $this->actingAs($this->tech)->getJson("/api/configuration/{$id}/status")->json();

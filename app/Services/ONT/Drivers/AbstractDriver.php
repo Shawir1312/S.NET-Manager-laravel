@@ -77,6 +77,15 @@ abstract class AbstractDriver implements ONTInterface
             ? (WanTarget::fromPath($req->wan['existing_path'], $ctx->root()) ?? $this->newWanTarget($ctx, $slot, $plan))
             : $this->newWanTarget($ctx, $slot, $plan);
 
+        // Bila ada SSID yang harus dibuat: buat & aktifkan SSID DULU, baru WAN dibuat lalu di-bind.
+        // FiberHome menolak binding (cwmp.9002) ke SSID yang dibuat setelah WAN / masih nonaktif.
+        // Tanpa SSID baru, urutan lama dipertahankan (WiFi tidak berubah bila pembuatan WAN gagal).
+        $this->planMissingSsids($ctx, $req, $plan);
+        $ssidFirst = collect($plan->steps)->contains('type', 'ensure_instance');
+        if ($ssidFirst) {
+            $this->attempt($plan, fn () => $this->configureSSID($ctx, $req, $plan));
+        }
+
         if ($wan->isNew) {
             $this->addNewWanSteps($ctx, $wan, $plan);
         }
@@ -85,9 +94,10 @@ abstract class AbstractDriver implements ONTInterface
             ? $this->createWANBridge($ctx, $req, $wan, $plan)
             : $this->createWANPPPoE($ctx, $req, $wan, $plan));
         $this->attempt($plan, fn () => $this->configureVLAN($ctx, $req, $wan, $plan));
-        $this->planMissingSsids($ctx, $req, $plan);
         $this->attempt($plan, fn () => $this->configureBinding($ctx, $req, $wan, $plan));
-        $this->attempt($plan, fn () => $this->configureSSID($ctx, $req, $plan));
+        if (! $ssidFirst) {
+            $this->attempt($plan, fn () => $this->configureSSID($ctx, $req, $plan));
+        }
 
         $plan->summary = $this->summary($ctx, $req, $wan);
 
