@@ -18,7 +18,9 @@ class SecurityHeaders
         }
         $response->headers->set('X-Content-Type-Options', 'nosniff');
         $response->headers->set('Referrer-Policy', 'same-origin');
-        $response->headers->set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+        // Kamera hanya diizinkan (untuk domain sendiri) di halaman scan SN ONT; halaman lain tetap diblokir.
+        $camera = $request->routeIs('ont-hotspot.index') ? 'camera=(self)' : 'camera=()';
+        $response->headers->set('Permissions-Policy', "{$camera}, microphone=(), geolocation=()");
 
         return $response;
     }
