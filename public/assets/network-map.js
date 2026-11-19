@@ -17,8 +17,14 @@ window.NetworkMap = (() => {
      *         onData(data), listEl }
      */
     function init(opts) {
-        const map = L.map(opts.el, { zoomControl: true }).setView([-2.5, 118], 5);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 20, attribution: '&copy; OpenStreetMap' }).addTo(map);
+        const map = L.map(opts.el, { zoomControl: true, maxZoom: 20 }).setView([-2.5, 118], 5);
+        // Referer wajib dikirim ke server tile (Referrer-Policy aplikasi = same-origin; tanpa ini OSM menjawab 403).
+        const ref = { referrerPolicy: 'strict-origin-when-cross-origin' };
+        const esri = 'https://server.arcgisonline.com/ArcGIS/rest/services/';
+        // Lapisan label Esri digambar bergaris di batas tile, jadi satelit dipakai tanpa overlay; nama jalan ada di "Peta jalan".
+        const satellite = L.tileLayer(esri + 'World_Imagery/MapServer/tile/{z}/{y}/{x}', { ...ref, maxZoom: 20, maxNativeZoom: 19, attribution: 'Citra &copy; Esri, Maxar, Earthstar Geographics' }).addTo(map);
+        const streets = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { ...ref, maxZoom: 20, maxNativeZoom: 19, attribution: '&copy; OpenStreetMap' });
+        L.control.layers({ 'Satelit': satellite, 'Peta jalan': streets }, null, { position: 'topright' }).addTo(map);
         const layer = L.layerGroup().addTo(map);
         let data = null, fitted = false, addMode = null, timer = null;
         const markers = { customer: {}, odp: {} };
@@ -28,7 +34,10 @@ window.NetworkMap = (() => {
 
         function line(from, to, status, tip) {
             if (!from || !to || from.lat == null || to.lat == null) return;
-            L.polyline([[from.lat, from.lng], [to.lat, to.lng]], { color: COLORS[status] || '#9ca3af', weight: status === 'up' || status === 'online' ? 3 : 2.5, className: 'nm-line nm-' + status, interactive: !!tip })
+            const pts = [[from.lat, from.lng], [to.lat, to.lng]];
+            // Garis bawah gelap agar tetap terlihat di atas citra satelit.
+            L.polyline(pts, { color: '#0f172a', weight: 7, opacity: 0.55, interactive: false }).addTo(layer);
+            L.polyline(pts, { color: COLORS[status] || '#9ca3af', weight: 4, className: 'nm-line nm-' + status, interactive: !!tip })
                 .bindTooltip(tip || '', { sticky: true }).addTo(layer);
         }
 
