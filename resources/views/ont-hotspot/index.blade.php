@@ -4,7 +4,7 @@
 <div class="page-header">
     <div>
         <h1 class="page-title"><i class="bi bi-qr-code-scan me-2 text-primary"></i>Setting ONT Hotspot</h1>
-        <p class="page-subtitle">Scan / isi SN ONT → cek online → isi nama → semua pengaturan ikut template hotspot</p>
+        <p class="page-subtitle">Scan / isi SN ONT → cek online → isi nama pemilik (komentar ONT di GenieACS) → semua pengaturan ikut template hotspot</p>
     </div>
     @can('manage-templates')
     <a href="{{ route('templates.index') }}" class="btn btn-outline-secondary"><i class="bi bi-file-earmark-code me-1"></i> Template ONT</a>
@@ -51,9 +51,9 @@
             <div class="card-body">
                 <div class="row g-3">
                     <div class="col-md-7">
-                        <label class="form-label">Nama Hotspot / Lokasi <span class="text-danger">*</span></label>
+                        <label class="form-label">Nama Pemilik / Komentar ONT <span class="text-danger">*</span></label>
                         <input type="text" class="form-control" id="nameInput" maxlength="32" placeholder="Contoh: Warung Bu Ani">
-                        <div class="form-text">Mengganti <code>{nama}</code> di nama SSID template (atau jadi nama SSID bila template tidak menetapkan nama).</div>
+                        <div class="form-text">Disimpan sebagai tag/komentar ONT di GenieACS untuk menandai ONT ini milik siapa (juga tampil di Monitor ONT).</div>
                     </div>
                     <div class="col-md-5">
                         <label class="form-label">Template Hotspot</label>
@@ -83,7 +83,7 @@
                 <h6 class="fw-bold text-dark"><i class="bi bi-info-circle me-1"></i>Cara pakai</h6>
                 <ol class="ps-3 mb-0">
                     <li>Scan QR/barcode SN di label ONT, atau ketik SN lalu klik <strong>Cek</strong>.</li>
-                    <li>Bila ONT <strong>online</strong>, isi nama hotspot lalu klik <strong>Terapkan</strong>.</li>
+                    <li>Bila ONT <strong>online</strong>, isi nama pemilik ONT lalu klik <strong>Terapkan</strong>. Nama disimpan sebagai komentar (tag) ONT di GenieACS.</li>
                     <li>VLAN, binding LAN/SSID, nama SSID &amp; password WiFi otomatis mengikuti template hotspot.</li>
                 </ol>
             </div>
@@ -154,7 +154,7 @@
             renderDevice(d, r);
             if (r.online && r.status !== 'unsupported') {
                 device = d;
-                $('searchResult').innerHTML = alertBox('success', '<i class="bi bi-check-circle me-1"></i>ONT online. Lanjutkan isi nama hotspot.');
+                $('searchResult').innerHTML = alertBox('success', '<i class="bi bi-check-circle me-1"></i>ONT online. Lanjutkan isi nama pemilik ONT.');
                 $('stepApply').style.display = '';
                 $('nameInput').focus();
                 renderPreview();
@@ -201,6 +201,7 @@
         const ssids = Object.entries(s.ssids).map(([i, n]) => `<span class="badge bg-white text-dark border me-1"><i class="bi bi-wifi text-primary me-1"></i>SSID ${i}: ${escHtml(String(n).split('{nama}').join(name))}</span>`).join('') || '<span class="text-muted">— tidak ada SSID di-bind —</span>';
         $('templatePreview').innerHTML = `
             <div class="fw-semibold mb-2"><i class="bi bi-file-earmark-code me-1"></i>Yang akan diterapkan</div>
+            <div class="mb-1">Komentar ONT (GenieACS): <span class="badge bg-info-subtle text-info border">#${escHtml(name)}</span></div>
             <div class="mb-1">WAN: <strong>${escHtml(s.slot.toUpperCase())}</strong> · VLAN <strong>${escHtml(String(s.vlan_id))}</strong> · ${escHtml(s.service_list)}</div>
             <div class="mb-1">LAN di-bind: ${s.lan.length ? s.lan.map(n => 'LAN ' + n).join(', ') : '—'}</div>
             <div class="mb-1">${ssids}</div>
@@ -210,13 +211,14 @@
     async function apply() {
         const name = $('nameInput').value.trim();
         if (!device) return;
-        if (!name) { OntApp.toast('Isi nama hotspot terlebih dahulu.', 'warning'); $('nameInput').focus(); return; }
+        if (!name) { OntApp.toast('Isi nama pemilik ONT terlebih dahulu.', 'warning'); $('nameInput').focus(); return; }
         if (!confirm(`Terapkan template hotspot ke ONT ${device.serial_number} dengan nama "${name}"?`)) return;
         const btn = $('btnApply');
         btn.disabled = true;
         btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Mengirim konfigurasi…';
         try {
             const r = await OntApp.api(URL_APPLY, { method: 'POST', body: { device_id: device.id, template_id: Number($('templateSelect').value), name } });
+            (r.warnings || []).forEach(w => OntApp.toast(w, 'warning'));
             pollStatus(r);
         } catch (e) {
             OntApp.toast(e.message, 'danger');

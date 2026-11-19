@@ -13,7 +13,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\View\View;
 
-/** Setting ONT Hotspot cepat: scan/isi SN → cek online → isi nama → terapkan template hotspot. */
+/** Setting ONT Hotspot cepat: scan/isi SN → cek online → isi nama (jadi tag ONT di GenieACS) → terapkan template hotspot. */
 class HotspotOntController extends Controller
 {
     public function __construct(private readonly HotspotOntSetup $setup) {}
@@ -40,12 +40,12 @@ class HotspotOntController extends Controller
 
         try {
             $template = $this->setup->template($d['template_id'] ?? null);
-            $job = $this->setup->apply(OntDevice::findOrFail($d['device_id']), $template, $d['name'], $request->user());
+            ['job' => $job, 'warnings' => $warnings] = $this->setup->apply(OntDevice::findOrFail($d['device_id']), $template, $d['name'], $request->user());
         } catch (ProvisioningException $e) {
             return response()->json(['message' => $e->getMessage(), 'error_code' => $e->errorCode], $e->httpStatus);
         }
 
         return response()->json(['id' => $job->uuid, 'status' => $job->fresh()->status->value, 'is_simulation' => $job->is_simulation,
-            'status_url' => route('api.configuration.status', $job->uuid), 'history_url' => route('history.show', $job->uuid)], 202);
+            'status_url' => route('api.configuration.status', $job->uuid), 'history_url' => route('history.show', $job->uuid), 'warnings' => $warnings], 202);
     }
 }

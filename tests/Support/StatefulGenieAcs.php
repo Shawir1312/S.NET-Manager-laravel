@@ -71,6 +71,14 @@ class StatefulGenieAcs
             return Http::response(['_id' => $id] + $task, 200);
         }
 
+        if (in_array($r->method(), ['POST', 'DELETE'], true) && preg_match('#^/devices/[^/]+/tags/(.+)$#', $path, $m)) {
+            $tag = rawurldecode($m[1]);
+            $tags = array_values(array_diff($this->doc['_tags'] ?? [], [$tag]));
+            $this->doc['_tags'] = $r->method() === 'POST' ? [...$tags, $tag] : $tags;
+
+            return Http::response('', 200);
+        }
+
         if ($r->method() === 'GET' && $path === '/tasks/') {
             $id = json_decode($q['query'], true)['_id'];
 

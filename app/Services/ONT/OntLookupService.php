@@ -181,6 +181,7 @@ class OntLookupService
                     'ip_address' => $live['ip_address'] ?? $device->ip_address,
                     'parameters_snapshot' => array_merge((array) $device->parameters_snapshot, [
                         'ssid_24' => $live['ssid_24'], 'ssid_5g' => $live['ssid_5g'], 'rx' => $live['rx'], 'tx' => $live['tx'],
+                        'tags' => array_values(array_filter((array) ($tree->raw()['_tags'] ?? []), 'is_string')),
                     ]),
                 ])->save();
                 $synced++;

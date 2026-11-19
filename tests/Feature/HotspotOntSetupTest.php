@@ -57,7 +57,7 @@ class HotspotOntSetupTest extends TestCase
 
         $this->assertSame(300, $input['wan']['vlan_id']);
         $this->assertSame(['index' => 1, 'ssid_name' => 'S.NET - Warung Bu Ani', 'password' => null, 'security' => 'None', 'enabled' => true, 'hidden' => null], $input['ssids'][0]);
-        $this->assertSame('Warung Bu Ani', $input['ssids'][1]['ssid_name'], 'SSID tanpa nama tetap memakai nama yang diisi');
+        $this->assertNull($input['ssids'][1]['ssid_name'], 'SSID tanpa nama di template tidak diganti namanya');
     }
 
     public function test_apply_endpoint_runs_simulation_job_with_template(): void
@@ -65,7 +65,7 @@ class HotspotOntSetupTest extends TestCase
         $this->seed(OntModelSeeder::class);
         $this->useFakeAcsSetting();
         config(['ontconfig.task_poll_interval_ms' => 0, 'ontconfig.task_timeout_seconds' => 1]);
-        (new StatefulGenieAcs($this->fiberhomeDoc()))->fake();
+        $acs = (new StatefulGenieAcs($this->fiberhomeDoc(['_tags' => ['PRESET-X']])))->fake();
         $device = OntDevice::create(['genieacs_id' => '000AC2-HG6145D2-FHTT9D34CF80', 'serial_number' => 'FHTT9D34CF80']);
         $admin = User::factory()->admin()->create();
         $this->actingAs($admin)->post('/templates', $this->templateData(['wifi_security' => 'password', 'wifi_key' => 'rahasia123']));
@@ -77,7 +77,13 @@ class HotspotOntSetupTest extends TestCase
         $this->actingAs($tech)->get('/dashboard')->assertOk()->assertSee('Setting ONT Hotspot');
 
         $res = $this->actingAs($tech)->postJson('/ont-hotspot/apply', ['device_id' => $device->id, 'name' => 'Warung Ani'])
-            ->assertStatus(202)->assertJsonPath('is_simulation', true);
+            ->assertStatus(202)->assertJsonPath('is_simulation', true)->assertJsonPath('warnings', []);
+        $this->assertSame(['PRESET-X', 'Warung Ani'], $acs->doc['_tags'], 'nama jadi tag ONT di GenieACS, tag lain tetap');
+
+        // Ganti nama: tag lama dari menu ini diganti, tag preset tetap.
+        $this->actingAs($tech)->postJson('/ont-hotspot/apply', ['device_id' => $device->id, 'name' => 'Toko Pak Budi'])->assertStatus(202);
+        $this->assertSame(['PRESET-X', 'Toko Pak Budi'], $acs->doc['_tags']);
+        $this->assertSame('Toko Pak Budi', $device->fresh()->parameters_snapshot['acs_tag']);
         $job = ConfigurationJob::where('uuid', $res->json('id'))->firstOrFail();
         $this->assertSame(ConfigurationTemplate::firstOrFail()->id, $job->configuration_template_id);
         $this->assertStringNotContainsString('rahasia123', json_encode($job->plan), 'password tidak muncul di rencana');

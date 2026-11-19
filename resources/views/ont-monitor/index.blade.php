@@ -68,15 +68,21 @@
             $ssids = array_values(array_unique(array_filter([$snap['ssid_24'] ?? null, $snap['ssid_5g'] ?? null])));
             $rx = $snap['rx'] ?? null;
             $isOnline = $d->last_inform_at && $d->last_inform_at->gte($threshold);
-            $displayName = $d->customer_name ?: ($ssids[0] ?? $d->serial_number);
-            $subTitle = $d->customer_name ? ($ssids ? 'SSID: '.$ssids[0] : $d->customer_username) : ($d->product_class ?: 'ONT Device');
+            $tags = array_values((array) ($snap['tags'] ?? []));
+            // Prioritas judul (sama dengan S.NET lama): tag/komentar ACS → nama pelanggan PPPoE → SSID → SN.
+            $displayName = $tags[0] ?? ($d->customer_name ?: ($ssids[0] ?? $d->serial_number));
+            $subTitle = match (true) {
+                isset($tags[0]) => $ssids ? 'SSID: '.$ssids[0] : ($d->customer_name ?: ($d->product_class ?: 'ONT Device')),
+                (bool) $d->customer_name => $ssids ? 'SSID: '.$ssids[0] : $d->customer_username,
+                default => $d->product_class ?: 'ONT Device',
+            };
             $mins = $d->last_inform_at ? $d->last_inform_at->diffInMinutes(now()) : null;
             $lastSeen = $mins === null ? '-' : ($mins < 1 ? 'Baru saja' : ($mins < 60 ? round($mins).'m lalu' : ($mins < 1440 ? round($mins / 60).'j lalu' : $d->last_inform_at->format('d/m/Y'))));
             $rxClass = $rx !== null && (float) $rx < -27 ? 'text-danger fw-bold' : ($rx !== null && (float) $rx < -25 ? 'text-warning fw-bold' : 'text-success');
             $remote = $remotes[$d->serial_number] ?? null;
             $remSec = $remote ? max(0, (int) now()->diffInSeconds($remote->expires_at, false)) : 0;
         @endphp
-        <div class="col-12 col-md-6 col-lg-4 ont-card-wrapper" data-search="{{ strtolower($d->serial_number.' '.$displayName.' '.$subTitle.' '.$d->ip_address.' '.implode(' ', $ssids)) }}">
+        <div class="col-12 col-md-6 col-lg-4 ont-card-wrapper" data-search="{{ strtolower($d->serial_number.' '.$displayName.' '.$subTitle.' '.$d->ip_address.' '.implode(' ', $ssids).' '.implode(' ', $tags)) }}">
             <div class="card border-0 shadow-sm h-100 rounded-3" style="transition: transform .15s ease, box-shadow .15s ease;">
                 <div class="card-body p-3 d-flex flex-column justify-content-between">
                     <div>
@@ -103,9 +109,10 @@
                             <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 font-monospace px-2 py-1" style="font-size: .72rem;">{{ $d->serial_number }}</span>
                             <span class="small text-muted" style="font-size: .72rem;"><i class="bi bi-clock me-1"></i>{{ $lastSeen }}</span>
                         </div>
-                        @if ($ssids)
+                        @if ($ssids || $tags)
                         <div class="d-flex flex-wrap gap-1 mb-2">
                             @foreach ($ssids as $sName)<span class="badge bg-light text-dark border px-2 py-1" style="font-size: .7rem; font-weight: 500;"><i class="bi bi-wifi me-1 text-primary"></i>{{ $sName }}</span>@endforeach
+                            @foreach ($tags as $t)<span class="badge bg-info bg-opacity-10 text-info border border-info border-opacity-25 px-2 py-1" style="font-size: .7rem;">#{{ $t }}</span>@endforeach
                         </div>
                         @endif
                         <div class="d-flex justify-content-between align-items-center small text-muted mb-3 bg-light p-2 rounded font-monospace" style="font-size: .75rem;">

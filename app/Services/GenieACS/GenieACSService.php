@@ -358,6 +358,20 @@ class GenieACSService
         }
     }
 
+    /** Tambah tag/komentar pada device (penanda pemilik ONT, tampil di GenieACS & Monitor ONT). */
+    public function addTag(string $deviceId, string $tag): void
+    {
+        $response = $this->post('/devices/'.rawurlencode($deviceId).'/tags/'.rawurlencode($tag));
+        if ($response->status() === 404) {
+            throw new GenieACSException('Device tidak ditemukan di GenieACS.', 'DEVICE_NOT_FOUND');
+        }
+    }
+
+    public function removeTag(string $deviceId, string $tag): void
+    {
+        $this->delete('/devices/'.rawurlencode($deviceId).'/tags/'.rawurlencode($tag));
+    }
+
     /**
      * Daftar device (untuk sinkronisasi cache lokal), dengan paging.
      *

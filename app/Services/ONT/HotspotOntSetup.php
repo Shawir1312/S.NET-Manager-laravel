@@ -7,13 +7,15 @@ use App\Models\ConfigurationJob;
 use App\Models\ConfigurationTemplate;
 use App\Models\OntDevice;
 use App\Models\User;
+use App\Services\GenieACS\Exceptions\GenieACSException;
+use App\Services\GenieACS\GenieACSService;
 use App\Services\Provisioning\ProvisioningException;
 use App\Services\Provisioning\ProvisioningService;
 use Illuminate\Support\Str;
 
 /**
- * Setting ONT hotspot cepat: semua parameter (WAN/VLAN, binding, SSID, keamanan WiFi) diambil dari template hotspot;
- * operator hanya mengisi nama (pengganti {nama} di SSID, atau jadi nama SSID bila template tidak menetapkan nama).
+ * Setting ONT hotspot cepat: semua parameter (WAN/VLAN, binding, SSID, keamanan WiFi) diambil dari template hotspot.
+ * Nama yang diisi operator disimpan sebagai tag/komentar ONT di GenieACS (penanda ONT milik siapa).
  */
 class HotspotOntSetup
 {
@@ -36,10 +38,10 @@ class HotspotOntSetup
      *
      * @return array<string, mixed>
      */
-    public function buildInput(ConfigurationTemplate $template, string $name): array
+    public function buildInput(ConfigurationTemplate $template, string $name = ''): array
     {
         $p = $template->payload;
-        $name = trim(preg_replace('/\s+/', ' ', $name));
+        $name = self::cleanName($name);
         $fixedNames = collect($p['ssids'] ?? [])->pluck('ssid_name', 'index');
         [$security, $password] = $template->hotspotWifi();
 
@@ -48,7 +50,8 @@ class HotspotOntSetup
             $fixed = $fixedNames[$index] ?? null;
             $ssids[] = [
                 'index' => (int) $index,
-                'ssid_name' => Str::limit($fixed !== null ? str_replace('{nama}', $name, $fixed) : $name, 32, ''),
+                // Nama SSID murni dari template ({nama} opsional); SSID tanpa nama di template tidak diganti namanya.
+                'ssid_name' => $fixed !== null ? Str::limit(str_replace('{nama}', $name, $fixed), 32, '') : null,
                 'password' => $password,
                 'security' => $security,
                 'enabled' => true, 'hidden' => null,
@@ -80,7 +83,8 @@ class HotspotOntSetup
 
         return [
             'vlan_id' => $input['wan']['vlan_id'], 'slot' => $input['wan']['slot'], 'service_list' => $input['wan']['service_list'],
-            'lan' => $input['binding']['lan'], 'ssids' => array_column($input['ssids'], 'ssid_name', 'index'),
+            'lan' => $input['binding']['lan'],
+            'ssids' => array_map(fn ($x) => $x ?? '(nama SSID tidak diubah)', array_column($input['ssids'], 'ssid_name', 'index')),
             'security' => match ($security) {
                 'None' => 'Tanpa password (terbuka)',
                 '11i' => 'Pakai password (WPA2)',
@@ -89,8 +93,37 @@ class HotspotOntSetup
         ];
     }
 
-    /** Validasi lewat preview lalu kirim konfigurasi. */
-    public function apply(OntDevice $device, ConfigurationTemplate $template, string $name, User $user): ConfigurationJob
+    /** Rapikan nama: spasi tunggal, maks. 32 karakter. */
+    public static function cleanName(string $name): string
+    {
+        return Str::limit(trim((string) preg_replace('/\s+/', ' ', $name)), 32, '');
+    }
+
+    /**
+     * Pasang nama sebagai tag ONT di GenieACS; tag lama yang dulu dipasang dari menu ini diganti.
+     * Tag lain (mis. untuk preset GenieACS) tidak disentuh.
+     */
+    public function tagDevice(OntDevice $device, string $name): void
+    {
+        $tag = self::cleanName($name);
+        $acs = GenieACSService::forDevice($device);
+        $old = $device->parameters_snapshot['acs_tag'] ?? null;
+        if ($old && $old !== $tag) {
+            rescue(fn () => $acs->removeTag($device->genieacs_id, $old), report: false);
+        }
+        $acs->addTag($device->genieacs_id, $tag);
+        $snapshot = (array) $device->parameters_snapshot;
+        $snapshot['tags'] = array_values(array_unique([$tag, ...array_diff($snapshot['tags'] ?? [], array_filter([$old]))]));
+        $snapshot['acs_tag'] = $tag;
+        $device->forceFill(['parameters_snapshot' => $snapshot])->save();
+    }
+
+    /**
+     * Pasang tag nama, validasi lewat preview, lalu kirim konfigurasi.
+     *
+     * @return array{job: ConfigurationJob, warnings: list<string>}
+     */
+    public function apply(OntDevice $device, ConfigurationTemplate $template, string $name, User $user): array
     {
         $input = $this->buildInput($template, $name);
         $errors = $this->provisioning->preview($device, $input)['errors'] ?? [];
@@ -98,6 +131,13 @@ class HotspotOntSetup
             throw new ProvisioningException(implode(' ', $errors), 'PREVIEW_FAILED', 422);
         }
 
-        return $this->provisioning->start($device, $input, $user, $template->id);
+        $warnings = [];
+        try {
+            $this->tagDevice($device, $name);
+        } catch (GenieACSException $e) {
+            $warnings[] = 'Nama belum tersimpan sebagai tag di GenieACS: '.$e->getMessage();
+        }
+
+        return ['job' => $this->provisioning->start($device, $input, $user, $template->id), 'warnings' => $warnings];
     }
 }

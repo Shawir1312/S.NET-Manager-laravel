@@ -49,7 +49,7 @@ class OntSyncTest extends TestCase
         $withHistory = OntDevice::create(['genie_acs_setting_id' => $server->id, 'genieacs_id' => 'LAMA-2', 'serial_number' => 'OLDSN0000002', 'synced_at' => now()->subDay()]);
         ConfigurationJob::forceCreate(['uuid' => (string) Str::uuid(), 'ont_device_id' => $withHistory->id, 'service_type' => 'pppoe', 'request_payload' => '{}', 'status' => 'success', 'idempotency_key' => 'k1']);
 
-        Http::fake(['acs-baru.test:7557/devices/*' => Http::response([$this->doc('ZTEGNEW00001', ['VirtualParameters' => ['RXPower' => ['_value' => '-18.2']]])])]);
+        Http::fake(['acs-baru.test:7557/devices/*' => Http::response([$this->doc('ZTEGNEW00001', ['_tags' => ['Warung Ani'], 'VirtualParameters' => ['RXPower' => ['_value' => '-18.2']]])])]);
         $admin = User::factory()->admin()->create();
 
         $this->actingAs($admin)->postJson('/ont-monitor/sync?server_id='.$server->id)->assertJsonPath('success', true);
@@ -58,6 +58,7 @@ class OntSyncTest extends TestCase
         $this->assertNull($withHistory->fresh()->genie_acs_setting_id, 'ONT berriwayat dilepas dari server, tidak dihapus');
         $new = OntDevice::where('serial_number', 'ZTEGNEW00001')->firstOrFail();
         $this->assertSame('-18.2', $new->parameters_snapshot['rx']);
-        $this->actingAs($admin)->get('/ont-monitor')->assertOk()->assertSee('ZTEGNEW00001')->assertDontSee('OLDSN0000001')->assertSee('Sinkron');
+        $this->actingAs($admin)->get('/ont-monitor')->assertOk()->assertSee('ZTEGNEW00001')->assertDontSee('OLDSN0000001')->assertSee('Sinkron')
+            ->assertSee('title="Warung Ani"', false)->assertSee('#Warung Ani');
     }
 }
