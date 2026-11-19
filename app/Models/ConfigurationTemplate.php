@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\ServiceType;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\Crypt;
 
 class ConfigurationTemplate extends Model
 {
@@ -41,6 +42,23 @@ class ConfigurationTemplate extends Model
         }
 
         return $payload;
+    }
+
+    /**
+     * Keamanan WiFi hotspot dari template: [mode keamanan SSIDMapper, password].
+     * keep = tidak diubah, open = tanpa password (None), password = WPA2 (11i) dengan password terenkripsi di payload.
+     *
+     * @return array{0: ?string, 1: ?string}
+     */
+    public function hotspotWifi(): array
+    {
+        $wifi = $this->payload['wifi'] ?? [];
+
+        return match ($wifi['security'] ?? 'keep') {
+            'open' => ['None', null],
+            'password' => filled($wifi['key_enc'] ?? null) ? ['11i', rescue(fn () => Crypt::decryptString($wifi['key_enc']), null, false)] : [null, null],
+            default => [null, null],
+        };
     }
 
     public function creator(): BelongsTo

@@ -19,8 +19,9 @@
         ],
         // Bagian ONT & ACS memakai mesin ont-autoconfig (wizard, template, verifikasi, rollback).
         'ONT & ACS' => [
+            ['Setting ONT Hotspot (Scan SN)', 'bi-qr-code-scan', 'ont-hotspot.index', 'configure-ont'],
             ['Config ONT Manual', 'bi-sliders', 'auto-config', 'configure-ont', ['service' => 'pppoe'], null, 'pppoe'],
-            ['Setting Hotspot ONT', 'bi-broadcast-pin', 'auto-config', 'configure-ont', ['service' => 'bridge'], null, 'bridge'],
+            ['Config Hotspot Manual', 'bi-broadcast-pin', 'auto-config', 'configure-ont', ['service' => 'bridge'], null, 'bridge'],
             ['Template ONT', 'bi-file-earmark-text', 'templates.index', 'configure-ont', [], 'templates.*'],
             ['Daftar ONT', 'bi-router', 'devices.index', 'view-devices', [], 'devices.*'],
             ['Riwayat Config ONT', 'bi-clock-history', 'history.index', 'configure-ont', [], 'history.*'],

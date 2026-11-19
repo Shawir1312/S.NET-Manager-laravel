@@ -69,17 +69,18 @@ class CustomerOntProvisioner
         $isPppoe = $template->service_type === ServiceType::Pppoe;
         $firstName = Str::before(trim($customer->full_name), ' ') ?: $customer->full_name;
         $fixedNames = collect($p['ssids'] ?? [])->pluck('ssid_name', 'index');
+        [$hotspotSecurity, $hotspotPassword] = $isPppoe ? [null, null] : $template->hotspotWifi();
 
         $ssids = [];
         foreach ($p['binding']['wlan'] ?? [] as $index) {
             $fixed = $fixedNames[$index] ?? null;
-            // SSID dengan nama tetap (hotspot) tidak diberi password pelanggan.
+            // SSID dengan nama tetap (hotspot) tidak diberi password pelanggan; hotspot memakai keamanan dari template.
             $password = $fixed === null && $isPppoe ? ($customer->ont_wifi_pass ?: null) : null;
             $ssids[] = [
                 'index' => (int) $index,
                 'ssid_name' => $fixed !== null ? str_replace('{nama}', $firstName, $fixed) : ($customer->ont_wifi_ssid ?: null),
-                'password' => $password,
-                'security' => $password ? '11i' : null, // WPA2-PSK; mesin wajib tahu mode saat password diubah
+                'password' => $isPppoe ? $password : $hotspotPassword,
+                'security' => $isPppoe ? ($password ? '11i' : null) : $hotspotSecurity, // WPA2-PSK; mesin wajib tahu mode saat password diubah
                 'enabled' => true, 'hidden' => null,
             ];
         }

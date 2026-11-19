@@ -8,9 +8,11 @@ use App\Services\Audit\AuditLogger;
 use App\Services\ONT\Mappers\WANMapper;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class TemplateController extends Controller
@@ -116,7 +118,15 @@ class TemplateController extends Controller
             'wlan' => ['array'], 'wlan.*' => ['integer', 'between:1,8'],
             'is_default' => ['sometimes', 'boolean'],
             'ssid_names' => ['array'], 'ssid_names.*' => ['nullable', 'string', 'max:32'],
+            'wifi_security' => ['nullable', 'in:keep,open,password'],
+            'wifi_key' => ['nullable', 'string', 'min:8', 'max:63'],
         ]);
+        // Keamanan WiFi hotspot: password disimpan TERENKRIPSI (bukan teks biasa); kosong saat edit = tidak diubah.
+        $security = $d['service_type'] === 'bridge' ? ($d['wifi_security'] ?? 'keep') : 'keep';
+        $keyEnc = filled($d['wifi_key'] ?? null) ? Crypt::encryptString($d['wifi_key']) : ($template?->payload['wifi']['key_enc'] ?? null);
+        if ($security === 'password' && blank($keyEnc)) {
+            throw ValidationException::withMessages(['wifi_key' => 'Isi password WiFi hotspot (minimal 8 karakter).']);
+        }
         $wlan = array_map('intval', $d['wlan'] ?? []);
         // Nama SSID tetap per WLAN yang di-bind; boleh memakai {nama} = nama depan pelanggan.
         $ssids = [];
@@ -143,6 +153,7 @@ class TemplateController extends Controller
                 ],
                 'binding' => ['lan' => array_map('intval', $d['lan'] ?? []), 'wlan' => $wlan],
                 'ssids' => $ssids,
+                'wifi' => ['security' => $security, 'key_enc' => $security === 'password' ? $keyEnc : null],
             ],
         ];
     }

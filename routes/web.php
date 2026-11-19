@@ -7,6 +7,7 @@ use App\Http\Controllers\DeviceController;
 use App\Http\Controllers\DeviceModelController;
 use App\Http\Controllers\GenieAcsSettingController;
 use App\Http\Controllers\HistoryController;
+use App\Http\Controllers\HotspotOntController;
 use App\Http\Controllers\SystemController;
 use App\Http\Controllers\TemplateController;
 use App\Http\Controllers\UserController;
@@ -29,6 +30,8 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::get('/dashboard', DashboardController::class)->name('dashboard');
 
     Route::get('/auto-config', [AutoConfigController::class, 'index'])->name('auto-config');
+    Route::get('/ont-hotspot', [HotspotOntController::class, 'index'])->name('ont-hotspot.index');
+    Route::post('/ont-hotspot/apply', [HotspotOntController::class, 'apply'])->middleware('throttle:10,1')->name('ont-hotspot.apply');
     Route::get('/devices', [DeviceController::class, 'index'])->name('devices.index');
     Route::get('/devices/{device}', [DeviceController::class, 'show'])->whereNumber('device')->name('devices.show');
 

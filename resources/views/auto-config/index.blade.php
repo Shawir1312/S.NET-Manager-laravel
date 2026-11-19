@@ -1,5 +1,5 @@
 @extends('layouts.app')
-@section('title', request('service') === 'bridge' ? 'Setting Hotspot ONT' : 'Config ONT Manual')
+@section('title', request('service') === 'bridge' ? 'Config Hotspot Manual' : 'Config ONT Manual')
 @section('subtitle', 'Konfigurasi WAN, VLAN, SSID & binding ONT lewat GenieACS — preview, backup, verifikasi dan rollback otomatis')
 
 @php

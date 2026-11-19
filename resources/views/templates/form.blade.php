@@ -48,7 +48,36 @@
                         <input class="form-control" name="ssid_names[{{ $n }}]" maxlength="32" value="{{ old('ssid_names.'.$n, $ssidNames[$n] ?? '') }}"></div></div>
                 @endforeach
             </div>
-            <div class="form-text">Kosongkan = pakai nama WiFi pelanggan. <code>{nama}</code> diganti nama depan pelanggan, mis. <code>S.NET - {nama}</code>. Hotspot: isi nama tetap, mis. <code>S.NET @Hotspot</code>. Password tidak pernah disimpan di template.</div></div>
+            <div class="form-text">Kosongkan = pakai nama WiFi pelanggan. <code>{nama}</code> diganti nama depan pelanggan, mis. <code>S.NET - {nama}</code>. Hotspot: isi nama tetap, mis. <code>S.NET @Hotspot</code> atau <code>S.NET - {nama}</code> ({nama} = nama yang diisi saat setting ONT hotspot). Password PPPoE/WiFi pelanggan tidak pernah disimpan di template.</div></div>
+        @php($wifi = $p['wifi'] ?? [])
+        <div class="col-12" id="hotspotWifiBox">
+            <div class="p-3 rounded border bg-light">
+                <div class="form-label fw-semibold mb-2"><i class="bi bi-wifi me-1 text-primary"></i>Keamanan WiFi Hotspot</div>
+                @foreach (['keep' => 'Biarkan seperti di ONT (tidak diubah)', 'open' => 'Tanpa password (WiFi terbuka)', 'password' => 'Pakai password (WPA2)'] as $v => $l)
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="radio" name="wifi_security" value="{{ $v }}" id="ws_{{ $v }}" @checked(old('wifi_security', $wifi['security'] ?? 'keep') === $v)>
+                        <label class="form-check-label" for="ws_{{ $v }}">{{ $l }}</label>
+                    </div>
+                @endforeach
+                <div class="mt-2" id="wifiKeyBox" style="max-width: 360px;">
+                    <input class="form-control" type="password" name="wifi_key" minlength="8" maxlength="63" autocomplete="new-password"
+                           placeholder="{{ filled($wifi['key_enc'] ?? null) ? 'Tersimpan (terenkripsi) — kosongkan jika tidak diubah' : 'Password WiFi hotspot, min. 8 karakter' }}">
+                </div>
+                <div class="form-text">Berlaku untuk semua SSID yang di-bind di template hotspot ini. Password disimpan terenkripsi.</div>
+            </div>
+        </div>
+        <script>
+            (() => {
+                const type = document.querySelector('[name=service_type]'), box = document.getElementById('hotspotWifiBox'), keyBox = document.getElementById('wifiKeyBox');
+                const sync = () => {
+                    box.style.display = type.value === 'bridge' ? '' : 'none';
+                    keyBox.style.display = document.querySelector('[name=wifi_security]:checked')?.value === 'password' ? '' : 'none';
+                };
+                type.addEventListener('change', sync);
+                document.querySelectorAll('[name=wifi_security]').forEach(r => r.addEventListener('change', sync));
+                sync();
+            })();
+        </script>
         <div class="col-12"><div class="form-check"><input type="hidden" name="is_default" value="0"><input class="form-check-input" type="checkbox" name="is_default" value="1" id="def" @checked(old('is_default', $template->is_default))><label class="form-check-label" for="def">Jadikan template default</label></div></div>
     </div>
     <div class="card-footer d-flex gap-2 justify-content-end">
