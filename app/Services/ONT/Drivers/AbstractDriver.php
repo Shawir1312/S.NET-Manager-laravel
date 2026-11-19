@@ -208,6 +208,8 @@ abstract class AbstractDriver implements ONTInterface
             }
         }
 
+        $this->enableBoundInterfaces($ctx, $req, $plan);
+
         $s = $wan->slot;
         $vars = $wan->vars();
         $method = $ctx->capability()?->binding_method ?? BindingMethod::Unknown;
@@ -242,6 +244,29 @@ abstract class AbstractDriver implements ONTInterface
         $plan->setValues([
             $this->val($ctx, $plan, "wan.{$s}.binding", $vars, BindingMapper::stringList($paths)),
         ], $this->bindingIncludesWan($ctx) ? 'Binding WAN + LAN/WLAN' : 'Binding LAN/WLAN');
+    }
+
+    /**
+     * Port LAN (dan SSID) yang akan di-bind harus aktif dulu: Huawei/FiberHome menolak binding ke interface
+     * nonaktif (cwmp.9002). Hanya interface yang dipilih & sedang nonaktif yang diubah; nilai lama dicadangkan.
+     */
+    protected function enableBoundInterfaces(DeviceContext $ctx, ConfigurationRequest $req, ProvisioningPlan $plan): void
+    {
+        $values = [];
+        $configuredSsids = array_column(array_filter($req->ssids, fn ($x) => $x['enabled'] === true), 'index');
+        foreach (['lan' => 'LANEthernetInterfaceConfig', 'wlan' => 'WLANConfiguration'] as $type => $object) {
+            foreach ($req->binding[$type] as $n) {
+                if ($type === 'wlan' && in_array($n, $configuredSsids, true)) {
+                    continue; // sudah diaktifkan oleh pengaturan SSID
+                }
+                $path = $ctx->root().".LANDevice.1.{$object}.{$n}.Enable";
+                $current = $ctx->tree->value($path);
+                if ($ctx->tree->has($path) && ! in_array(strtolower((string) $current), ['1', 'true'], true)) {
+                    $values[] = $plan->value($path, true, 'xsd:boolean', "{$type}.enable", true);
+                }
+            }
+        }
+        $plan->setValues($values, 'Mengaktifkan port LAN/SSID yang akan di-bind');
     }
 
     public function configureSSID(DeviceContext $ctx, ConfigurationRequest $req, ProvisioningPlan $plan): void

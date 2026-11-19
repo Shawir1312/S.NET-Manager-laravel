@@ -337,4 +337,25 @@ class ProvisioningTest extends TestCase
         $wlan = $sim->doc['InternetGatewayDevice']['LANDevice']['1']['WLANConfiguration'];
         $this->assertSame(['1', '4'], array_map('strval', array_values(array_filter(array_keys($wlan), 'is_numeric'))), 'SSID 2 & 3 perantara dihapus lagi');
     }
+
+    public function test_disabled_lan_port_is_enabled_before_binding_and_restored_on_rollback(): void
+    {
+        $this->enableProduction();
+        $doc = $this->fiberhomeDoc();
+        $doc['InternetGatewayDevice']['LANDevice']['1']['LANEthernetInterfaceConfig']['2']['Enable'] = ['_value' => [false, 'xsd:boolean'], '_type' => 'xsd:boolean', '_writable' => true];
+        $sim = (new StatefulGenieAcs($doc))->fake();
+
+        $input = $this->input(['binding' => ['lan' => [1, 2], 'wlan' => [1]]]);
+        $preview = $this->actingAs($this->tech)->postJson("/api/ont/{$this->device->id}/preview", $input)->assertOk()->json();
+        $enable = collect($preview['steps'])->firstWhere('description', 'Mengaktifkan port LAN/SSID yang akan di-bind');
+        $this->assertSame(['InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig.2.Enable'], array_column($enable['values'], 'path'), 'hanya port nonaktif yang diubah');
+
+        $id = $this->actingAs($this->tech)->postJson('/api/ont/configure', $input)->assertStatus(202)->json('id');
+        $status = $this->actingAs($this->tech)->getJson("/api/configuration/{$id}/status")->json();
+        $this->assertSame('success', $status['status'], json_encode($status['timeline']));
+        $this->assertTrue($sim->doc['InternetGatewayDevice']['LANDevice']['1']['LANEthernetInterfaceConfig']['2']['Enable']['_value'][0]);
+
+        $this->actingAs($this->tech)->postJson("/api/configuration/{$id}/rollback")->assertOk();
+        $this->assertFalse((bool) $sim->doc['InternetGatewayDevice']['LANDevice']['1']['LANEthernetInterfaceConfig']['2']['Enable']['_value'][0]);
+    }
 }
