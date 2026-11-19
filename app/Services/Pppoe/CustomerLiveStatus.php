@@ -26,13 +26,14 @@ class CustomerLiveStatus
     /** @return array<string, object{username: string, framedipaddress: ?string, acctstarttime: ?string}> username => sesi */
     public function pppoeSessions(): array
     {
-        return Cache::remember('snet.live.ppp_active', self::TTL_SECONDS, function () {
+        // Cache hanya menyimpan array biasa: cache.serializable_classes = false menolak objek saat dibaca ulang.
+        $rows = Cache::remember('snet.live.ppp_active', self::TTL_SECONDS, function () {
             $sessions = [];
             foreach (Router::where('status', 'active')->get() as $router) {
                 $active = rescue(fn () => $this->mikrotik->with($router, fn (MikrotikConnection $api) => $api->comm('/ppp/active/print')), [], report: false);
                 foreach ((array) $active as $row) {
                     if (filled($row['name'] ?? null)) {
-                        $sessions[$row['name']] = (object) [
+                        $sessions[$row['name']] = [
                             'username' => $row['name'],
                             'framedipaddress' => $row['address'] ?? null,
                             'acctstarttime' => self::startFromUptime($row['uptime'] ?? null),
@@ -43,6 +44,8 @@ class CustomerLiveStatus
 
             return $sessions;
         });
+
+        return array_map(fn (array $row) => (object) $row, $rows);
     }
 
     /**

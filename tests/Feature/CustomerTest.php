@@ -114,8 +114,12 @@ class CustomerTest extends TestCase
         $this->mikrotik->active = ['odegoa@snet'];
         Http::fake(['*/devices/*' => Http::response([['_id' => 'x', '_deviceId' => ['_SerialNumber' => '4857544379FC699D', '_OUI' => '00259E', '_ProductClass' => 'HG8245H5', '_Manufacturer' => 'Huawei'], '_lastInform' => now()->subMinute()->toIso8601String()]])]);
 
-        $this->actingAs($this->operator)->get('/customers')->assertOk()
-            ->assertSee('10.10.0.2')->assertSee('ONT Online')->assertDontSee('ONT Offline');
+        // Cache database seperti produksi (serializable_classes = false): muat dua kali, yang kedua dari cache.
+        config(['cache.default' => 'database']);
+        foreach ([1, 2] as $load) {
+            $this->actingAs($this->operator)->get('/customers')->assertOk()
+                ->assertSee('10.10.0.2')->assertSee('ONT Online')->assertDontSee('ONT Offline');
+        }
         $this->assertSame('HWTC79FC699D', $customer->ont_sn);
     }
 
