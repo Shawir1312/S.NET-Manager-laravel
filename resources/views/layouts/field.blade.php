@@ -23,6 +23,7 @@
         .field-nav a i { display: block; font-size: 1.35rem; }
         .field-nav a.active { color: #0d6efd; font-weight: 600; }
         .field-main .page-header { margin-bottom: 16px; }
+        .field-main .field-hide { display: none !important; } /* isian lanjutan: di lapangan pakai nilai default */
         .field-main .position-sticky.bottom-0 { bottom: calc(60px + env(safe-area-inset-bottom)) !important; }
     </style>
     @stack('head')
@@ -38,6 +39,7 @@
     @if (config('ontconfig.provisioning_mode') !== 'production')
         <span class="badge bg-warning text-dark" title="Konfigurasi ONT tidak dikirim ke perangkat asli">SIMULASI</span>
     @endif
+    <a href="{{ route('dashboard') }}" class="btn btn-sm btn-light" title="Dashboard lengkap" aria-label="Dashboard lengkap"><i class="bi bi-grid"></i></a>
     <form method="POST" action="{{ route('logout') }}">@csrf<button class="btn btn-sm btn-light" title="Logout" aria-label="Logout"><i class="bi bi-box-arrow-right"></i></button></form>
 </header>
 
@@ -66,11 +68,13 @@
     @endcan
 </nav>
 
+<div id="app-progress-bar" class="app-progress-bar"></div>
 <div id="toast-container"></div>
 <div class="toast-container position-fixed bottom-0 end-0 p-3 mb-5" id="toastArea"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script src="{{ asset('assets/app.js') }}"></script>
+<script src="{{ asset('snet/app.js') }}?v={{ filemtime(public_path('snet/app.js')) }}"></script>
 @stack('scripts')
 </body>
 </html>

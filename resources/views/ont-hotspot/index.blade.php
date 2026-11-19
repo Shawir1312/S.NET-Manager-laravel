@@ -93,6 +93,7 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="{{ asset('assets/sn-scan.js') }}?v={{ filemtime(public_path('assets/sn-scan.js')) }}"></script>
 <script>
 (() => {
     const TEMPLATES = @json($templates);
@@ -100,50 +101,17 @@
     const URL_ONLINE = @json(url('/api/ont/__ID__/check-online'));
     const URL_APPLY = @json(route('ont-hotspot.apply'));
     const $ = id => document.getElementById(id);
-    let device = null, scanner = null;
+    let device = null;
 
     const alertBox = (tone, html) => `<div class="alert alert-${tone} py-2 mb-0">${html}</div>`;
 
-    // GPON SN hex 16 karakter (mis. label Huawei 4857544379FC699D) → bentuk PON di ACS (HWTC79FC699D).
-    function hexToPon(h) {
-        if (!/^[0-9A-F]{16}$/.test(h)) return null;
-        const vendor = h.slice(0, 8).match(/../g).map(b => String.fromCharCode(parseInt(b, 16))).join('');
-        return /^[A-Z]{4}$/.test(vendor) ? vendor + h.slice(8) : null;
-    }
-
-    // Kandidat SN dari isi QR/barcode (bisa berisi SN perangkat, MAC, dll.), urut dari yang paling mungkin GPON SN.
-    function snCandidates(text) {
-        const t = String(text).toUpperCase();
-        const out = [];
-        for (let i = 0; i + 16 <= t.length; i++) { const p = hexToPon(t.slice(i, i + 16)); if (p) out.push(p); }
-        (t.match(/[A-Z]{4}[0-9A-F]{8}/g) || []).forEach(x => out.push(x));
-        const labeled = (t.match(/S\/?N\s*[:=]?\s*([A-Z0-9]{8,24})/) || [])[1];
-        if (labeled) out.push(hexToPon(labeled) || labeled);
-        (t.match(/[A-Z0-9]{8,24}/g) || []).sort((a, b) => b.length - a.length).forEach(x => out.push(hexToPon(x) || x));
-        return [...new Set(out)].slice(0, 5);
-    }
-
-    async function startScan() {
-        if (!window.Html5Qrcode) { OntApp.toast('Library scanner gagal dimuat. Periksa koneksi internet.', 'danger'); return; }
-        $('scanBox').style.display = '';
-        scanner = new Html5Qrcode('qrReader');
-        try {
-            await scanner.start({ facingMode: 'environment' }, { fps: 10, qrbox: { width: 260, height: 160 } }, decoded => {
-                const candidates = snCandidates(decoded);
-                $('snInput').value = candidates[0] || String(decoded).trim();
-                $('scanRaw').textContent = 'Terbaca dari kamera: ' + String(decoded).slice(0, 120);
-                stopScan();
-                search(candidates);
-            });
-        } catch (e) {
-            $('scanBox').style.display = 'none';
-            OntApp.toast('Kamera tidak bisa dibuka: ' + (e?.message || e) + '. Pastikan situs memakai HTTPS & izin kamera diberikan.', 'danger');
-        }
-    }
-    async function stopScan() {
-        try { if (scanner?.isScanning) await scanner.stop(); scanner?.clear(); } catch (e) {}
-        $('scanBox').style.display = 'none';
-    }
+    const hexToPon = SnScan.hexToPon;
+    const startScan = () => SnScan.start($('scanBox'), 'qrReader', (decoded, candidates) => {
+        $('snInput').value = candidates[0] || decoded.trim();
+        $('scanRaw').textContent = 'Terbaca dari kamera: ' + decoded.slice(0, 120);
+        search(candidates);
+    });
+    const stopScan = () => SnScan.stop($('scanBox'));
 
     function renderDevice(d, ready) {
         $('deviceCard').style.display = '';
@@ -272,6 +240,9 @@
 
     $('btnScan').addEventListener('click', startScan);
     $('btnStopScan').addEventListener('click', stopScan);
+    // "Coba lagi" dari beranda lapangan: ?sn=... langsung dicari.
+    const presetSn = new URLSearchParams(location.search).get('sn');
+    if (presetSn) { $('snInput').value = presetSn; search(); }
     $('btnSearch').addEventListener('click', () => search());
     $('snInput').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); search(); } });
     $('btnApply').addEventListener('click', apply);

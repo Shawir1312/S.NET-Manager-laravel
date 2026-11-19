@@ -41,19 +41,12 @@
                         <div class="col-md-4 d-flex align-items-end">
                             <a href="{{ route('templates.index') }}" class="btn btn-outline-success w-100"><i class="bi bi-file-earmark-text me-1"></i> Kelola Template ONT</a>
                         </div>
-                        <div class="col-md-6">
-                            <label class="form-label fw-bold">Template ONT Default — PPPoE</label>
-                            <select class="form-select" name="default_pppoe_template_id">
-                                @foreach ($templates->where('service_type', \App\Enums\ServiceType::Pppoe) as $t)<option value="{{ $t->id }}" @selected($t->is_default)>{{ $t->name }}</option>@endforeach
-                            </select>
-                            <div class="form-text">Slot WAN, VLAN, binding LAN/SSID diatur di template (mesin ONT otomatis memilih slot per merek/model).</div>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label fw-bold">Template ONT Default — Hotspot (WAN 2 Bridge)</label>
-                            <select class="form-select" name="default_hotspot_template_id">
-                                @foreach ($templates->where('service_type', \App\Enums\ServiceType::Bridge) as $t)<option value="{{ $t->id }}" @selected($t->is_default)>{{ $t->name }}</option>@endforeach
-                            </select>
-                            <div class="form-text">VLAN hotspot dan nama SSID 2/6 (mis. <code>S.NET @Hotspot</code>) diisi di template Hotspot.</div>
+                        <div class="col-12">
+                            <div class="alert alert-light border mb-0 small">
+                                <i class="bi bi-info-circle me-1"></i> Template default diatur di <strong>Template ONT</strong> (centang "Jadikan template default"); pengecualian per router di <strong>Router / NAS</strong>.
+                                Default sekarang — PPPoE: <strong>{{ $templates->where('service_type', \App\Enums\ServiceType::Pppoe)->firstWhere('is_default', true)?->name ?? '-' }}</strong>,
+                                Hotspot: <strong>{{ $templates->where('service_type', \App\Enums\ServiceType::Bridge)->firstWhere('is_default', true)?->name ?? '-' }}</strong>.
+                            </div>
                         </div>
                     </div>
                 </div>

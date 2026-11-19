@@ -33,7 +33,18 @@
                     <div class="font-monospace small">{{ $job->device?->serial_number ?? '-' }}</div>
                     <small class="text-body-secondary">{{ $job->service_type->label() }} · {{ $job->created_at->diffForHumans() }}</small>
                 </div>
-                <span class="badge text-bg-{{ $job->status->badge() }}">{{ $job->status->label() }}</span>
+                <div class="d-flex align-items-center gap-1 flex-shrink-0">
+                    <span class="badge text-bg-{{ $job->status->badge() }}">{{ $job->status->label() }}</span>
+                    @if ($job->status !== \App\Enums\JobStatus::Success && $job->status->isFinal() && $job->service_type === \App\Enums\ServiceType::Bridge && $job->device)
+                        <a class="btn btn-sm btn-outline-primary" href="{{ route('field.hotspot', ['sn' => $job->device->serial_number]) }}" title="Coba lagi" aria-label="Coba lagi"><i class="bi bi-arrow-repeat"></i></a>
+                    @endif
+                    @can('rollback', $job)
+                        @if ($job->status->isFinal() && ($job->is_simulation ? $job->backups->isNotEmpty() : $job->backups->contains('applied', true)) && ! $job->histories->contains('event', 'rollback'))
+                            <button class="btn btn-sm btn-outline-danger js-rollback" data-url="{{ route('api.configuration.rollback', $job) }}" title="Rollback" aria-label="Rollback"><i class="bi bi-arrow-counterclockwise"></i></button>
+                        @endif
+                    @endcan
+                    @can('view', $job)<a class="btn btn-sm btn-outline-secondary" href="{{ route('history.show', $job) }}" title="Detail" aria-label="Detail"><i class="bi bi-chevron-right"></i></a>@endcan
+                </div>
             </li>
         @empty
             <li class="list-group-item text-body-secondary">Belum ada.</li>
@@ -41,3 +52,13 @@
     </ul>
 </div>
 @endsection
+@push('scripts')
+<script>
+document.querySelectorAll('.js-rollback').forEach(b => b.addEventListener('click', async () => {
+    if (!b.dataset.confirm) { b.dataset.confirm = '1'; b.innerHTML = 'Yakin?'; return; }
+    b.disabled = true;
+    try { const r = await OntApp.api(b.dataset.url, { method: 'POST' }); OntApp.toast(r.message, r.status === 'complete' || r.status === 'simulated' ? 'success' : 'warning'); setTimeout(() => location.reload(), 1200); }
+    catch (err) { OntApp.toast(err.message, 'danger'); b.disabled = false; }
+}));
+</script>
+@endpush

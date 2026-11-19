@@ -28,7 +28,7 @@ class FieldAppTest extends TestCase
             $this->actingAs($tech)->get($url)->assertOk()->assertSee('Lapangan')->assertDontSee('id="sidebar"', false);
         }
         $this->actingAs($tech)->get('/lapangan/hotspot')->assertHeader('Permissions-Policy', 'camera=(self), microphone=(), geolocation=()');
-        $this->actingAs($tech)->get('/lapangan/pelanggan/baru')->assertSee('name="from_field"', false);
+        $this->actingAs($tech)->get('/lapangan/pelanggan/baru')->assertSee('name="from_field"', false)->assertSee('field-hide', false)->assertSee('btnScanSn', false);
 
         $this->actingAs($tech)->post('/customers', [
             'router_id' => $router->id, 'full_name' => 'Rina', 'phone' => '081234567891', 'pppoe_username' => 'rina@snet',
@@ -36,5 +36,15 @@ class FieldAppTest extends TestCase
             'from_field' => 1,
         ])->assertRedirect('/lapangan');
         $this->assertTrue(PppoeCustomer::where('pppoe_username', 'rina@snet')->exists());
+    }
+
+    public function test_technician_lands_on_field_app_after_login_admin_on_dashboard(): void
+    {
+        $tech = User::factory()->teknisi()->create(['password' => 'rahasia123']);
+        $this->post('/login', ['email' => $tech->email, 'password' => 'rahasia123'])->assertRedirect('/lapangan');
+        $this->post('/logout');
+
+        $admin = User::factory()->admin()->create(['password' => 'rahasia123']);
+        $this->post('/login', ['email' => $admin->email, 'password' => 'rahasia123'])->assertRedirect('/dashboard');
     }
 }

@@ -14,6 +14,7 @@
 </div>
 @endsection
 @section('content')
+@include('wireguard._tabs')
 @include('partials.errors')
 <div class="alert alert-info border-0 shadow-sm mb-4 d-flex align-items-center gap-3">
     <i class="bi bi-info-circle-fill fs-3 text-info"></i>

@@ -19,7 +19,7 @@ class AuthTest extends TestCase
 
     public function test_user_can_login_and_login_is_audited(): void
     {
-        $user = User::factory()->create(['password' => 'rahasia-123']);
+        $user = User::factory()->admin()->create(['password' => 'rahasia-123']);
 
         $this->post('/login', ['email' => $user->email, 'password' => 'rahasia-123'])
             ->assertRedirect(route('dashboard'));
@@ -31,7 +31,7 @@ class AuthTest extends TestCase
 
     public function test_legacy_admin_can_login_with_username(): void
     {
-        $user = User::factory()->create(['username' => 'operator1', 'password' => 'rahasia-123']);
+        $user = User::factory()->admin()->create(['username' => 'operator1', 'password' => 'rahasia-123']);
 
         $this->post('/login', ['email' => 'operator1', 'password' => 'rahasia-123'])
             ->assertRedirect(route('dashboard'));
@@ -41,7 +41,7 @@ class AuthTest extends TestCase
 
     public function test_wrong_password_is_rejected_and_not_logged_in_plaintext(): void
     {
-        $user = User::factory()->create(['password' => 'rahasia-123']);
+        $user = User::factory()->admin()->create(['password' => 'rahasia-123']);
 
         $this->post('/login', ['email' => $user->email, 'password' => 'salah-sekali'])
             ->assertSessionHasErrors('email');
@@ -73,7 +73,7 @@ class AuthTest extends TestCase
 
     public function test_login_is_rate_limited_after_five_failures(): void
     {
-        $user = User::factory()->create(['password' => 'rahasia-123']);
+        $user = User::factory()->admin()->create(['password' => 'rahasia-123']);
 
         for ($i = 0; $i < 5; $i++) {
             $this->post('/login', ['email' => $user->email, 'password' => 'salah']);

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Auth;
 
+use App\Enums\Role;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Services\Audit\AuditLogger;
@@ -65,7 +66,8 @@ class LoginController extends Controller
         $user->forceFill(['last_login_at' => now(), 'last_login_ip' => $request->ip()])->save();
         $audit->log('auth.login', $user, [], $user->id);
 
-        return redirect()->intended(route('dashboard'));
+        // Teknisi langsung ke Aplikasi Lapangan (tampilan HP); admin & viewer ke dashboard.
+        return redirect()->intended(route($user->role === Role::Teknisi ? 'field.home' : 'dashboard'));
     }
 
     public function logout(Request $request, AuditLogger $audit): RedirectResponse

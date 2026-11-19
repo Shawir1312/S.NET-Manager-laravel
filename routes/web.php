@@ -37,8 +37,6 @@ Route::middleware(['auth', 'active'])->group(function () {
 
     Route::get('/history', [HistoryController::class, 'index'])->name('history.index');
     Route::get('/history/{job}', [HistoryController::class, 'show'])->name('history.show');
-    Route::get('/wan-management', [HistoryController::class, 'wans'])->name('wans.index');
-    Route::get('/wifi', [HistoryController::class, 'ssids'])->name('ssids.index');
 
     Route::get('/templates', [TemplateController::class, 'index'])->name('templates.index');
     Route::middleware('role:admin')->group(function () {

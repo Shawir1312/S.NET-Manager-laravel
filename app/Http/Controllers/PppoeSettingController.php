@@ -53,14 +53,6 @@ class PppoeSettingController extends Controller
                 unset($data[$key]);
             }
         }
-        // Template default PPPoE & Hotspot dipakai mesin provisioning ont-autoconfig.
-        foreach (['pppoe' => 'default_pppoe_template_id', 'bridge' => 'default_hotspot_template_id'] as $type => $field) {
-            $id = $request->integer($field);
-            if ($id && ConfigurationTemplate::whereKey($id)->where('service_type', $type)->exists()) {
-                ConfigurationTemplate::where('service_type', $type)->update(['is_default' => false]);
-                ConfigurationTemplate::whereKey($id)->update(['is_default' => true]);
-            }
-        }
         $settings->put('pppoe', $data);
         $audit->log('settings.pppoe_updated', null, ['keys' => array_keys($data)]);
 

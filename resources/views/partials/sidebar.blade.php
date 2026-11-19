@@ -4,7 +4,7 @@
     $sections = [
         'Utama' => [
             ['Dashboard', 'bi-speedometer2', 'dashboard', null],
-            ['Aplikasi Lapangan (HP)', 'bi-phone', 'field.home', null, [], 'field.*'],
+            ['Aplikasi Lapangan (HP)', 'bi-phone', 'field.home', 'operate', [], 'field.*'],
         ],
         'Monitoring' => [
             ['User Aktif', 'bi-wifi', 'monitoring.active', 'operate'],
@@ -12,68 +12,48 @@
         ],
         ($user->isAdmin() ? 'Broadband (PPPoE)' : 'Pelanggan') => [
             ['Pelanggan Rumahan', 'bi-house-door', 'customers.index', 'operate', [], 'customers.*'],
-            ['Paket PPPoE', 'bi-box', 'pppoe-profiles.index', 'manage-settings'],
+            ['Paket PPPoE', 'bi-box', 'pppoe-profiles.index', 'manage-settings', [], 'pppoe-profiles.*'],
             ['Riwayat Pembayaran', 'bi-wallet2', 'payments.index', 'operate'],
-            ['Monitor ONT', 'bi-hdd-network', 'ont-monitor.index', 'operate'],
-            ['WhatsApp Notifikasi', 'bi-whatsapp', 'whatsapp.index', 'manage-settings', ['tab' => 'inbox']],
             ['Pengaturan PPPoE', 'bi-gear-wide-connected', 'pppoe-settings.edit', 'manage-settings'],
         ],
         // Bagian ONT & ACS memakai mesin ont-autoconfig (wizard, template, verifikasi, rollback).
         'ONT & ACS' => [
             ['Setting ONT Hotspot (Scan SN)', 'bi-qr-code-scan', 'ont-hotspot.index', 'configure-ont'],
-            ['Config ONT Manual', 'bi-sliders', 'auto-config', 'configure-ont', ['service' => 'pppoe'], null, 'pppoe'],
-            ['Config Hotspot Manual', 'bi-broadcast-pin', 'auto-config', 'configure-ont', ['service' => 'bridge'], null, 'bridge'],
+            // Viewer (tanpa hak operate) tetap bisa melihat daftar ONT (read-only).
+            $user->can('operate')
+                ? ['Monitor ONT', 'bi-hdd-network', 'ont-monitor.index', 'operate', [], 'ont-monitor.*|devices.*']
+                : ['Daftar ONT', 'bi-hdd-network', 'devices.index', 'view-devices', [], 'devices.*'],
+            ['Config ONT Manual', 'bi-sliders', 'auto-config', 'configure-ont'],
             ['Template ONT', 'bi-file-earmark-text', 'templates.index', 'configure-ont', [], 'templates.*'],
-            ['Daftar ONT', 'bi-router', 'devices.index', 'view-devices', [], 'devices.*'],
             ['Riwayat Config ONT', 'bi-clock-history', 'history.index', 'configure-ont', [], 'history.*'],
             ['Model ONT', 'bi-cpu', 'models.index', 'manage-models', [], 'models.*'],
         ],
-        'Voucher' => [
+        'Voucher Hotspot' => [
             ['Generate Voucher', 'bi-plus-circle', 'vouchers.create', 'operate'],
-            ['Daftar Voucher', 'bi-ticket-perforated', 'vouchers.index', 'operate', [], null, 'list'],
-            ['Voucher Aktif', 'bi-ticket-detailed', 'vouchers.index', 'operate', ['status' => 'active'], null, 'active'],
+            ['Daftar Voucher', 'bi-ticket-perforated', 'vouchers.index', 'operate'],
+            ['Paket Hotspot', 'bi-collection', 'hotspot-profiles.index', 'manage-settings', [], 'hotspot-profiles.*'],
         ],
-        'Paket' => [
-            ['Profil / Paket', 'bi-collection', 'hotspot-profiles.index', 'manage-settings', [], 'hotspot-profiles.*'],
-        ],
-        'Infrastruktur' => [
+        'Jaringan' => [
             ['Router / NAS', 'bi-router', 'routers.index', 'manage-settings', [], 'routers.*'],
-        ],
-        'VPN WireGuard' => [
-            ['Router / Peer VPN', 'bi-shield-lock', 'wireguard.index', 'manage-settings', [], null, 'routers'],
-            ['Port Forwarding (NAT)', 'bi-arrow-left-right', 'wireguard.index', 'manage-settings', ['tab' => 'forwards'], null, 'forwards'],
-            ['Server WireGuard', 'bi-gear', 'wireguard.index', 'manage-settings', ['tab' => 'settings'], null, 'settings'],
-            ['Log WireGuard', 'bi-journal-text', 'wireguard.index', 'manage-settings', ['tab' => 'logs'], null, 'logs'],
+            ['VPN WireGuard', 'bi-shield-lock', 'wireguard.index', 'manage-settings', [], 'wireguard.*'],
         ],
         'Laporan' => [
             ['Penjualan Hotspot', 'bi-bar-chart-line', 'reports.sales', 'operate'],
-            ['Pembayaran PPPoE', 'bi-wallet2', 'payments.index', 'operate'],
             ['Pemakaian Data', 'bi-graph-up-arrow', 'reports.usage', 'operate'],
-            ['Laporan Penagihan', 'bi-wallet2', 'reports.penagihan', 'operate'],
+            ['Penagihan Reseller', 'bi-receipt', 'reports.penagihan', 'operate', [], 'reports.penagihan*'],
         ],
         'Administrasi' => [
             ['Kelola Admin', 'bi-person-gear', 'users.index', 'manage-users', [], 'users.*'],
+            ['WhatsApp Notifikasi', 'bi-whatsapp', 'whatsapp.index', 'manage-settings', ['tab' => 'inbox'], 'whatsapp.*'],
             ['Config GenieACS', 'bi-hdd-rack', 'settings.genieacs.edit', 'manage-settings'],
             ['Audit Log', 'bi-journal-text', 'settings.audit', 'view-audit'],
             ['Backup / Restore', 'bi-cloud-download', 'settings.backup', 'manage-settings'],
+            ['Status Sistem', 'bi-activity', 'system.index', 'manage-users'],
             ['Pengaturan', 'bi-sliders', 'settings.general', 'manage-settings'],
         ],
     ];
 
-    // Menu yang memakai route sama (voucher, WireGuard, wizard ONT) dibedakan dari query string.
-    $isActive = function (array $item): bool {
-        [, , $route, , $params, $pattern, $variant] = $item + [3 => null, 4 => [], 5 => null, 6 => null];
-        if (! request()->routeIs($pattern ?? $route)) {
-            return false;
-        }
-
-        return match ($route) {
-            'vouchers.index' => ($variant === 'active') === (request('status') === 'active'),
-            'wireguard.index' => request('tab', 'routers') === $variant || ($variant === 'routers' && request()->routeIs('wireguard.show', 'wireguard.create', 'wireguard.edit')),
-            'auto-config' => request('service', 'pppoe') === $variant,
-            default => true,
-        };
-    };
+    $isActive = fn (array $item): bool => request()->routeIs(...explode('|', $item[5] ?? $item[2]));
 @endphp
 <aside id="sidebar">
     <div class="sidebar-brand d-flex align-items-center justify-content-between">

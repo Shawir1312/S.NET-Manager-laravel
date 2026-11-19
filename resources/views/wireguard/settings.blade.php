@@ -21,6 +21,7 @@
 </div>
 @endsection
 @section('content')
+@include('wireguard._tabs')
 @include('partials.errors')
 <div class="row g-4">
     <div class="col-12 col-lg-8">

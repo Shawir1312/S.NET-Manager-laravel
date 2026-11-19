@@ -20,6 +20,7 @@
 </div>
 @endsection
 @section('content')
+@include('wireguard._tabs')
 @include('partials.errors')
 <div class="row g-3 mb-4">
     <div class="col-6 col-md-3"><div class="stat-card blue h-100"><div class="stat-icon"><i class="bi bi-router"></i></div><div class="stat-value">{{ number_format($routers->count()) }}</div><div class="stat-label">Total Router Peer</div></div></div>

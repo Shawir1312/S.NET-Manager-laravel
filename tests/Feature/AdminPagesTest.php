@@ -29,7 +29,7 @@ class AdminPagesTest extends TestCase
     {
         $model = OntModel::first();
         $template = ConfigurationTemplate::first();
-        foreach (['/dashboard', '/auto-config', '/devices', '/wan-management', '/wifi', '/templates', '/templates/create',
+        foreach (['/dashboard', '/auto-config', '/devices', '/lapangan', '/templates', '/templates/create',
             "/templates/{$template->id}/edit", '/models', '/models/create', "/models/{$model->id}/edit", '/history', '/users',
             '/users/create', "/users/{$this->admin->id}/edit", '/system', '/settings/genieacs'] as $url) {
             $this->actingAs($this->admin)->get($url)->assertOk();

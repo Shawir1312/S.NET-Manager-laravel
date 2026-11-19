@@ -11,6 +11,7 @@
 </div>
 @endsection
 @section('content')
+@include('wireguard._tabs')
 <div class="card border-0 shadow-sm">
     <div class="card-header bg-transparent py-3"><span class="fw-bold fs-6">100 Log Aktivitas Terakhir</span></div>
     <div class="table-responsive">
