@@ -118,11 +118,16 @@ class CustomerOntProvisioner
         $pppoeTemplate = $this->templateFor($customer, ServiceType::Pppoe, $pppoeTemplateId);
         $hotspotTemplate = $withHotspot ? $this->templateFor($customer, ServiceType::Bridge, $hotspotTemplateId) : null;
 
-        $job = $this->provisioning->start($device, $this->buildInput($customer, $pppoeTemplate, $pppoePassword), $user, $pppoeTemplate->id);
-        $warnings = [];
+        // Port/SSID template yang tidak ada di ONT ini dilewati; yang ada tetap diterapkan.
+        [$pppoeInput, $skipped] = $this->provisioning->fitInterfaces($device, $this->buildInput($customer, $pppoeTemplate, $pppoePassword));
+        $job = $this->provisioning->start($device, $pppoeInput, $user, $pppoeTemplate->id);
+        $warnings = $skipped === [] ? [] : ['PPPoE — dilewati karena tidak ada di ONT ini: '.implode(', ', $skipped).'.'];
 
         if ($hotspotTemplate) {
-            $input = $this->buildInput($customer, $hotspotTemplate, null);
+            [$input, $skipped] = $this->provisioning->fitInterfaces($device, $this->buildInput($customer, $hotspotTemplate, null));
+            if ($skipped !== []) {
+                $warnings[] = 'Hotspot — dilewati karena tidak ada di ONT ini: '.implode(', ', $skipped).'.';
+            }
             // Cek dulu sekarang: kalau ditolak (mis. VLAN bentrok) admin langsung tahu, bukan gagal diam-diam di antrean.
             $errors = $this->provisioning->preview($device, $input)['errors'] ?? [];
             if ($errors !== []) {

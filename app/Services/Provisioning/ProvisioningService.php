@@ -2,6 +2,7 @@
 
 namespace App\Services\Provisioning;
 
+use App\Enums\BindingMethod;
 use App\Enums\JobStatus;
 use App\Enums\ServiceType;
 use App\Jobs\RunProvisioningJob;
@@ -59,6 +60,43 @@ class ProvisioningService
         }
 
         return ['ctx' => $ctx, 'plan' => $plan, 'blockers' => ONTValidator::productionBlockers($ctx, $plan)];
+    }
+
+    /**
+     * Untuk konfigurasi dari TEMPLATE: buang LAN/SSID yang tidak ada di ONT ini (atau di luar batas binding model),
+     * agar port/SSID yang ada tetap diterapkan, bukan seluruh konfigurasi gagal.
+     *
+     * @return array{0: array<string, mixed>, 1: list<string>} [input yang disesuaikan, daftar interface yang dilewati]
+     */
+    public function fitInterfaces(OntDevice $device, array $input): array
+    {
+        $tree = $this->acs($device)->getDeviceDetails($device->genieacs_id);
+        $ctx = DeviceContext::build($device, $tree, $this->detector->detect($tree));
+        $flagLimit = ($ctx->capability()?->binding_method ?? BindingMethod::Unknown) === BindingMethod::Flags ? 4 : PHP_INT_MAX;
+        $exists = fn (string $type, int $n) => ONTValidator::interfaceExists($ctx, $type, $n);
+        $skipped = [];
+
+        foreach (['lan' => 'LAN', 'wlan' => 'SSID'] as $type => $label) {
+            $keep = [];
+            foreach ($input['binding'][$type] ?? [] as $n) {
+                if ($exists($type, (int) $n) && $n <= $flagLimit) {
+                    $keep[] = (int) $n;
+                } else {
+                    $skipped[] = "{$label} {$n}";
+                }
+            }
+            $input['binding'][$type] = $keep;
+        }
+        $input['ssids'] = array_values(array_filter($input['ssids'] ?? [], function (array $ssid) use ($exists, &$skipped) {
+            if ($exists('wlan', (int) $ssid['index'])) {
+                return true;
+            }
+            $skipped[] = "SSID {$ssid['index']}";
+
+            return false;
+        }));
+
+        return [$input, array_values(array_unique($skipped))];
     }
 
     /** @return array<string, mixed> */

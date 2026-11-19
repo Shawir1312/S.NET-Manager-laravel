@@ -91,4 +91,35 @@ class HotspotOntSetupTest extends TestCase
         $this->actingAs($tech)->postJson('/ont-hotspot/apply', ['device_id' => $device->id, 'name' => '<script>'])->assertUnprocessable();
         $this->actingAs(User::factory()->viewer()->create())->postJson('/ont-hotspot/apply', ['device_id' => $device->id, 'name' => 'X'])->assertForbidden();
     }
+
+    public function test_missing_ports_and_ssids_are_skipped_instead_of_failing(): void
+    {
+        $this->seed(OntModelSeeder::class);
+        $this->useFakeAcsSetting();
+        config(['ontconfig.task_poll_interval_ms' => 0, 'ontconfig.task_timeout_seconds' => 1]);
+        // Tiru ONT pengguna: LAN 3/4 dan SSID 2/6 tidak ada.
+        $doc = $this->fiberhomeDoc();
+        foreach ([3, 4] as $n) {
+            unset($doc['InternetGatewayDevice']['LANDevice']['1']['LANEthernetInterfaceConfig'][$n]);
+        }
+        foreach ([2, 6] as $n) {
+            unset($doc['InternetGatewayDevice']['LANDevice']['1']['WLANConfiguration'][$n]);
+        }
+        (new StatefulGenieAcs($doc))->fake();
+        $device = OntDevice::create(['genieacs_id' => '000AC2-HG6145D2-FHTT9D34CF80', 'serial_number' => 'FHTT9D34CF80']);
+        ConfigurationTemplate::create(['name' => 'SETTING VOUCHERAN', 'service_type' => ServiceType::Bridge, 'is_default' => true, 'payload' => [
+            'wan' => ['slot' => 'ip', 'vlan_id' => 300, 'service_list' => 'Other'], 'binding' => ['lan' => [1, 3, 4], 'wlan' => [1, 2, 6]],
+            'ssids' => [['index' => 1, 'ssid_name' => 'S.NET'], ['index' => 2, 'ssid_name' => 'S.NET'], ['index' => 6, 'ssid_name' => 'S.NET']],
+            'wifi' => ['security' => 'open'],
+        ]]);
+
+        $res = $this->actingAs(User::factory()->teknisi()->create())->postJson('/ont-hotspot/apply', ['device_id' => $device->id, 'name' => 'Warung Ani']);
+        $res->assertStatus(202);
+
+        $this->assertSame(['Dilewati karena tidak ada di ONT ini: LAN 3, LAN 4, SSID 2, SSID 6.'], $res->json('warnings'));
+        $job = ConfigurationJob::where('uuid', $res->json('id'))->firstOrFail();
+        $this->assertNotSame('failed', $job->fresh()->status->value, (string) $job->fresh()->error_message);
+        $payload = json_encode($job->plan);
+        $this->assertStringNotContainsString('WLANConfiguration.6', $payload);
+    }
 }

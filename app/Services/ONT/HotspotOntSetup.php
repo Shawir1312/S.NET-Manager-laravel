@@ -125,13 +125,14 @@ class HotspotOntSetup
      */
     public function apply(OntDevice $device, ConfigurationTemplate $template, string $name, User $user): array
     {
-        $input = $this->buildInput($template, $name);
+        // Port/SSID template yang tidak ada di ONT ini dilewati; yang ada tetap diterapkan.
+        [$input, $skipped] = $this->provisioning->fitInterfaces($device, $this->buildInput($template, $name));
         $errors = $this->provisioning->preview($device, $input)['errors'] ?? [];
         if ($errors !== []) {
             throw new ProvisioningException(implode(' ', $errors), 'PREVIEW_FAILED', 422);
         }
 
-        $warnings = [];
+        $warnings = $skipped === [] ? [] : ['Dilewati karena tidak ada di ONT ini: '.implode(', ', $skipped).'.'];
         try {
             $this->tagDevice($device, $name);
         } catch (GenieACSException $e) {
