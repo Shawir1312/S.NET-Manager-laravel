@@ -245,8 +245,6 @@ step_wireguard() {
     mkdir -p /etc/wireguard && chmod 700 /etc/wireguard
     [ -f /etc/wireguard/server_private.key ] || (umask 077; wg genkey > /etc/wireguard/server_private.key)
     wg pubkey < /etc/wireguard/server_private.key > /etc/wireguard/server_public.key
-    # Public key boleh dibaca aplikasi (diisi otomatis ke Pengaturan WireGuard).
-    cp /etc/wireguard/server_public.key "$APP_DIR/storage/app/wg_server_public.key" && chown "$WEB_USER":"$WEB_USER" "$APP_DIR/storage/app/wg_server_public.key"
     local port=51820 prefix=10.66.66 wan
     wan="$(ip route get 8.8.8.8 2>/dev/null | awk '{for(i=1;i<=NF;i++) if ($i=="dev") print $(i+1)}' | head -1)"; wan="${wan:-eth0}"
     if [ ! -f /etc/wireguard/wg0.conf ]; then
@@ -259,6 +257,23 @@ PostUp = iptables -I INPUT 1 -p udp --dport ${port} -j ACCEPT; iptables -I INPUT
 PostDown = iptables -D INPUT -p udp --dport ${port} -j ACCEPT; iptables -D INPUT -i wg0 -j ACCEPT; iptables -D FORWARD -i wg0 -j ACCEPT; iptables -D FORWARD -o wg0 -j ACCEPT; iptables -t nat -D POSTROUTING -o ${wan} -j MASQUERADE; iptables -t nat -D POSTROUTING -o wg0 -j MASQUERADE
 EOF
         chmod 600 /etc/wireguard/wg0.conf
+    else
+        info "wg0.conf sudah ada — dipakai apa adanya (subnet & port dibaca dari file)."
+    fi
+    # Baca konfigurasi wg0 yang berlaku (bisa dari instalasi lama) → diberikan ke installer web:
+    # kunci publik diturunkan dari PrivateKey wg0.conf, subnet dari Address pertama, port dari ListenPort.
+    local conf_priv conf_addr conf_port pub
+    conf_priv="$(awk '/^PrivateKey *=/{sub(/^PrivateKey *= */, ""); print; exit}' /etc/wireguard/wg0.conf | tr -d ' ')"
+    conf_addr="$(awk '/^Address *=/{sub(/^Address *= */, ""); print; exit}' /etc/wireguard/wg0.conf | cut -d, -f1 | tr -d ' ')"
+    conf_port="$(awk '/^ListenPort *=/{sub(/^ListenPort *= */, ""); print; exit}' /etc/wireguard/wg0.conf | tr -d ' ')"
+    pub="$(printf '%s' "$conf_priv" | wg pubkey 2>/dev/null)"
+    [[ "$conf_addr" =~ ^([0-9]+\.[0-9]+\.[0-9]+)\.[0-9]+/ ]] && prefix="${BASH_REMATCH[1]}"
+    [[ "$conf_port" =~ ^[0-9]{2,5}$ ]] && port="$conf_port"
+    if [ -n "$pub" ]; then
+        printf '{"pubkey":"%s","subnet_prefix":"%s.","listen_port":"%s"}\n' "$pub" "$prefix" "$port" > "$APP_DIR/storage/app/wg_server.json"
+        printf '%s\n' "$pub" > "$APP_DIR/storage/app/wg_server_public.key"
+        chown "$WEB_USER":"$WEB_USER" "$APP_DIR/storage/app/wg_server.json" "$APP_DIR/storage/app/wg_server_public.key"
+        ok "WireGuard server: subnet ${prefix}.0/24, port ${port} (diisi otomatis ke aplikasi)."
     fi
     grep -q '^net.ipv4.ip_forward=1' /etc/sysctl.conf || echo 'net.ipv4.ip_forward=1' >> /etc/sysctl.conf
     sysctl -w net.ipv4.ip_forward=1 >/dev/null

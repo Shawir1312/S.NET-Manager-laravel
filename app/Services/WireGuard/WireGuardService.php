@@ -92,34 +92,62 @@ class WireGuardService
         return array_values(array_unique($allowed));
     }
 
+    /** Nama interface khusus aplikasi ini — tidak bentrok dengan `wg-snet` dari S.NET lama / VPN lain. */
+    public const MIKROTIK_IFACE = 'wg-snetmgr';
+
+    /**
+     * Skrip RouterOS v7 yang aman ditempel berulang kali: semua objek yang pernah dibuat skrip ini
+     * (ditandai komentar "S.NET-MGR", atau cocok dengan kunci/IP tunnel router ini) dihapus dulu, lalu dibuat ulang.
+     * Aturan firewall diletakkan di atas tanpa `place-before=0` (yang gagal bila daftar aturan masih kosong).
+     */
     public function mikrotikScript(WgRouter $router): string
     {
         $c = $this->config();
         [$host, $port] = array_pad(explode(':', $c['wg_server_endpoint']), 2, $c['wg_listen_port']);
         $net = rtrim($c['wg_subnet_prefix'], '.').'.0';
         $allowed = $this->allowedFor($router);
+        $lans = self::normalizeSubnets($router->lan_subnets);
+        $if = self::MIKROTIK_IFACE;
+        $top = fn (string $rule) => ":if ([:len [/ip firewall filter find dynamic=no]] > 0) do={/ip firewall filter add {$rule} place-before=[:pick [/ip firewall filter find dynamic=no] 0]} else={/ip firewall filter add {$rule}}";
+
         $lines = [
-            '# S.NET WireGuard — MikroTik RouterOS v7',
+            '# S.NET MANAGER — WireGuard MikroTik RouterOS v7',
             "# Router: {$router->name} | Tunnel: {$router->tunnel_ip}/24 | ".now()->format('Y-m-d H:i'),
-            '/interface wireguard',
-            "add name=wg-snet listen-port={$router->listen_port} private-key=\"{$router->private_key}\" comment=\"S.NET WireGuard VPN Tunnel\"",
-            '/ip address',
-            "add address={$router->tunnel_ip}/24 interface=wg-snet network={$net} comment=\"IP VPN S.NET\"",
-            '/interface wireguard peers',
-            "add interface=wg-snet public-key=\"{$c['wg_server_pubkey']}\" endpoint-address={$host} endpoint-port={$port} allowed-address=".implode(',', $allowed).' persistent-keepalive=25s comment="VPS S.NET Hub Peer"',
+            '# Aman ditempel ulang: konfigurasi lama dari skrip ini dihapus dulu, interface VPN lain tidak disentuh.',
+            ...($c['wg_server_pubkey'] === '' ? ['# PERINGATAN: Server Public Key belum diisi di Pengaturan Server WireGuard — isi dulu lalu salin ulang skrip ini.'] : []),
+            '',
+            '# 1. Bersihkan konfigurasi lama dari skrip ini',
+            "/interface wireguard peers remove [find public-key=\"{$c['wg_server_pubkey']}\"]",
+            "/interface wireguard remove [find private-key=\"{$router->private_key}\"]",
+            "/interface wireguard remove [find name=\"{$if}\"]",
+            "/ip address remove [find address=\"{$router->tunnel_ip}/24\"]",
+            '/ip route remove [find comment="S.NET-MGR route"]',
+            '/ip firewall filter remove [find comment~"^S.NET-MGR"]',
+            '/ip firewall nat remove [find comment~"^S.NET-MGR"]',
+            "/ip firewall nat remove [find comment=\"Masquerade WireGuard VPS to LAN & ONT\" src-address=\"{$net}/24\"]",
         ];
-        foreach (array_slice($allowed, 1) as $lan) {
-            $lines[] = "/ip route add dst-address={$lan} gateway=wg-snet comment=\"S.NET route\"";
+        foreach ($lans as $lan) {
+            $lines[] = "/ip firewall nat remove [find comment=\"Masquerade to {$lan}\" dst-address=\"{$lan}\"]";
         }
         array_push($lines,
-            '/ip firewall filter',
-            'add chain=input in-interface=wg-snet action=accept place-before=0 comment="Allow SNET WireGuard Input"',
-            'add chain=forward in-interface=wg-snet action=accept place-before=0 comment="Allow SNET WireGuard Forward"',
-            '/ip firewall nat',
-            "add chain=srcnat src-address={$net}/24 action=masquerade place-before=0 comment=\"Masquerade WireGuard VPS to LAN & ONT\"",
+            '',
+            '# 2. Interface, IP & peer ke VPS',
+            "/interface wireguard add name={$if} listen-port={$router->listen_port} private-key=\"{$router->private_key}\" comment=\"S.NET-MGR tunnel\"",
+            "/ip address add address={$router->tunnel_ip}/24 interface={$if} network={$net} comment=\"S.NET-MGR IP VPN\"",
+            "/interface wireguard peers add interface={$if} public-key=\"{$c['wg_server_pubkey']}\" endpoint-address={$host} endpoint-port={$port} allowed-address=".implode(',', $allowed).' persistent-keepalive=25s comment="S.NET-MGR VPS hub"',
         );
-        foreach (self::normalizeSubnets($router->lan_subnets) as $lan) {
-            $lines[] = "add chain=srcnat dst-address={$lan} action=masquerade place-before=0 comment=\"Masquerade to {$lan}\"";
+        foreach (array_slice($allowed, 1) as $lan) {
+            $lines[] = "/ip route add dst-address={$lan} gateway={$if} comment=\"S.NET-MGR route\"";
+        }
+        array_push($lines,
+            '',
+            '# 3. Izinkan akses dari VPS (diletakkan paling atas) & NAT ke LAN/ONT',
+            $top("chain=input in-interface={$if} action=accept comment=\"S.NET-MGR allow input\""),
+            $top("chain=forward in-interface={$if} action=accept comment=\"S.NET-MGR allow forward\""),
+            "/ip firewall nat add chain=srcnat src-address={$net}/24 action=masquerade comment=\"S.NET-MGR masquerade VPS\"",
+        );
+        foreach ($lans as $lan) {
+            $lines[] = "/ip firewall nat add chain=srcnat dst-address={$lan} action=masquerade comment=\"S.NET-MGR masquerade {$lan}\"";
         }
 
         return implode("\n", $lines)."\n";

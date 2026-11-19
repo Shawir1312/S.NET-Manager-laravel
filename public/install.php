@@ -341,11 +341,18 @@ function install(string $base, string $envFile, string $lockFile, array $in): ar
         }
         $log[] = '✔ Data awal (model ONT, template, server GenieACS) dibuat.';
 
-        // Kunci publik server WireGuard yang dibuat skrip setup → isi otomatis Pengaturan WireGuard.
-        if (is_readable($pubFile = $base.'/storage/app/wg_server_public.key') && strlen($pub = trim((string) file_get_contents($pubFile))) === 44) {
-            $host = (string) parse_url($in['app_url'], PHP_URL_HOST);
-            $app->make(SnetSettings::class)->put('wireguard', ['wg_server_pubkey' => $pub, 'wg_server_endpoint' => $host.':51820']);
-            $log[] = '✔ Kunci server WireGuard diisi otomatis.';
+        // Data server WireGuard dari skrip setup (kunci publik, subnet & port wg0 yang sedang berlaku) → Pengaturan WireGuard.
+        $wg = is_readable($wgFile = $base.'/storage/app/wg_server.json') ? (array) json_decode((string) file_get_contents($wgFile), true) : [];
+        $wg['pubkey'] ??= is_readable($pubFile = $base.'/storage/app/wg_server_public.key') ? trim((string) file_get_contents($pubFile)) : '';
+        if (strlen((string) $wg['pubkey']) === 44) {
+            $port = preg_match('/^\d{2,5}$/', (string) ($wg['listen_port'] ?? '')) ? (string) $wg['listen_port'] : '51820';
+            $settings = ['wg_server_pubkey' => (string) $wg['pubkey'], 'wg_listen_port' => $port,
+                'wg_server_endpoint' => parse_url($in['app_url'], PHP_URL_HOST).':'.$port];
+            if (preg_match('/^(\d{1,3}\.){3}$/', (string) ($wg['subnet_prefix'] ?? ''))) {
+                $settings['wg_subnet_prefix'] = (string) $wg['subnet_prefix'];
+            }
+            $app->make(SnetSettings::class)->put('wireguard', $settings);
+            $log[] = '✔ WireGuard diisi otomatis (subnet '.($settings['wg_subnet_prefix'] ?? '10.66.66.').'0/24, port '.$port.').';
         }
 
         try {
