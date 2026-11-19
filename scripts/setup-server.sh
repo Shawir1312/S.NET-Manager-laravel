@@ -7,7 +7,8 @@
 #  Setelah itu installer web (install.php) bisa memasang/memperbaiki komponen sendiri
 #  lewat /usr/local/sbin/snet-setup (dipasang skrip ini, milik root).
 #
-#  Pemakaian:  setup-server.sh [all|web|php|composer|mysql|freeradius|wireguard|whatsapp|queue|cron|sudoers|check]
+#  Pemakaian:  setup-server.sh [all|web|php|composer|mysql|freeradius|wireguard|whatsapp|queue|cron|sudoers|cli|update|check]
+#  Update aplikasi cukup:  s up
 # =============================================================================
 set -uo pipefail
 export DEBIAN_FRONTEND=noninteractive
@@ -133,7 +134,7 @@ EOF
 }
 
 step_composer() {
-    if [ -f "$APP_DIR/vendor/autoload.php" ]; then ok "Dependensi PHP (vendor) sudah ada."; return; fi
+    if [ -f "$APP_DIR/vendor/autoload.php" ] && [ "${FORCE_COMPOSER:-0}" != 1 ]; then ok "Dependensi PHP (vendor) sudah ada."; return; fi
     php_ok || die "PHP 8.3 tidak ditemukan ($PHP_BIN). Pasang PHP 8.3 dulu."
     if ! command -v composer >/dev/null; then
         info "Memasang Composer…"
@@ -373,14 +374,83 @@ step_permissions() {
     ok "Hak akses folder dirapikan (755/644; storage & bootstrap/cache bisa ditulis $WEB_USER)."
 }
 
+# Perintah singkat `s` di terminal: `s up` = update aplikasi dari GitHub.
+step_cli() {
+    cat > /usr/local/bin/s <<'EOS'
+#!/usr/bin/env bash
+# S.NET MANAGER — perintah singkat. Dipasang oleh scripts/setup-server.sh (langkah cli).
+APP="$(cat /etc/snet-manager.path 2>/dev/null)"
+[ -f "$APP/artisan" ] || { echo "Folder aplikasi tidak ditemukan (/etc/snet-manager.path)."; exit 1; }
+case "${1:-}" in
+    up|update)
+        [ "$(id -u)" -eq 0 ] || exec sudo "$0" "$@"
+        exec bash "$APP/scripts/setup-server.sh" update ;;
+    *)
+        echo "Pemakaian:"
+        echo "  s up    Update S.NET MANAGER dari GitHub (git pull, composer, migrasi, cache, restart service)"
+        exit 1 ;;
+esac
+EOS
+    chmod 755 /usr/local/bin/s
+    echo "$APP_DIR" > /etc/snet-manager.path; chmod 644 /etc/snet-manager.path
+    ok "Perintah 's up' terpasang (/usr/local/bin/s)."
+}
+
+# Tarik versi terbaru lalu jalankan sisa langkah dengan skrip versi BARU (bila skrip ikut berubah).
+step_update() {
+    # Salinan root (snet-setup) boleh dipanggil user web lewat sudo; update menjalankan kode dari folder
+    # aplikasi sebagai root, jadi hanya boleh dari root/admin, bukan dari aplikasi web.
+    [ "${SUDO_USER:-}" = "$WEB_USER" ] && die "Update hanya boleh dijalankan root dari terminal: s up"
+    cd "$APP_DIR" || die "Folder aplikasi tidak ditemukan."
+    git config --global --get-all safe.directory 2>/dev/null | grep -qx "$APP_DIR" || git config --global --add safe.directory "$APP_DIR"
+    git config core.fileMode false
+    local old branch
+    old="$(git rev-parse HEAD)"; branch="$(git rev-parse --abbrev-ref HEAD)"
+    if ! git diff --quiet || ! git diff --cached --quiet; then
+        git stash push -q -m "s-up-$(date +%Y%m%d-%H%M%S)" && warn "Perubahan lokal di server disimpan ke 'git stash' (lihat: git stash list)."
+    fi
+    info "Menarik versi terbaru ($branch) dari GitHub…"
+    git pull --ff-only -q origin "$branch" || die "git pull gagal. Cek koneksi/akses repo GitHub."
+    if [ "$old" = "$(git rev-parse HEAD)" ]; then
+        ok "Sudah versi terbaru: $(git log -1 --format='%h %s')"
+        exit 0
+    fi
+    exec bash "$APP_DIR/scripts/setup-server.sh" post-update "$old"
+}
+
+step_post_update() {
+    local old="${1:-}"
+    changed() { [ -z "$old" ] || git -C "$APP_DIR" diff --name-only "$old" HEAD -- "$@" | grep -q .; }
+    step_permissions
+    if changed composer.json composer.lock || [ ! -f "$APP_DIR/vendor/autoload.php" ]; then FORCE_COMPOSER=1 step_composer; fi
+    local art=(sudo -u "$WEB_USER" "${PHP_CLI[@]}" "$APP_DIR/artisan")
+    if [ -f "$APP_DIR/.env" ]; then
+        "${art[@]}" migrate --force --no-interaction >/dev/null 2>&1 && ok "Migrasi database selesai." || warn "Migrasi gagal — cek: cd $APP_DIR && php artisan migrate --force"
+        "${art[@]}" optimize:clear >/dev/null 2>&1 && ok "Cache Laravel dibersihkan."
+    fi
+    if [ -f /etc/systemd/system/snet-wa.service ]; then
+        if changed wa-service/package.json wa-service/package-lock.json; then step_whatsapp
+        elif changed wa-service; then systemctl restart snet-wa && ok "Layanan WhatsApp direstart."; fi
+    fi
+    if changed scripts/setup-server.sh || [ ! -x /usr/local/bin/s ]; then
+        step_cli
+        [ -f /usr/local/sbin/snet-setup ] && install -o root -g root -m 755 "$APP_DIR/scripts/setup-server.sh" /usr/local/sbin/snet-setup && ok "Skrip snet-setup diperbarui."
+    fi
+    systemctl is-enabled --quiet snet-queue 2>/dev/null && systemctl restart snet-queue && ok "Queue worker direstart."
+    echo
+    [ -n "$old" ] && { info "Perubahan yang masuk:"; git -C "$APP_DIR" log --oneline "$old"..HEAD | sed 's/^/    /'; }
+    ok "Update selesai: $(git -C "$APP_DIR" log -1 --format='%h %s')"
+}
+
 case "$STEP" in
     all)
         info "Folder aplikasi: $APP_DIR (user web: $WEB_USER, aaPanel: $([ "$AAPANEL" -eq 1 ] && echo ya || echo tidak))"
         step_base; step_web; step_php; step_composer; step_mysql; step_freeradius; step_wireguard; step_whatsapp
-        step_queue; step_cron; step_permissions; step_sudoers
+        step_queue; step_cron; step_permissions; step_sudoers; step_cli
         echo; ok "Selesai. Buka http://$(hostname -I 2>/dev/null | awk '{print $1}')/install.php (atau domain Anda) untuk melanjutkan."
         ;;
-    web|php|composer|mysql|freeradius|wireguard|whatsapp|queue|cron|sudoers|permissions) "step_$STEP" ;;
+    web|php|composer|mysql|freeradius|wireguard|whatsapp|queue|cron|sudoers|permissions|cli|update) "step_$STEP" ;;
+    post-update) step_post_update "${2:-}" ;;
     post-install)   # dipanggil install.php setelah database siap
         step_freeradius; step_queue; [ -f /etc/systemd/system/snet-wa.service ] && step_whatsapp; step_permissions ;;
     *) die "Langkah tidak dikenal: $STEP" ;;
