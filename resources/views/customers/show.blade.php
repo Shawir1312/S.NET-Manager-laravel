@@ -66,13 +66,12 @@
                         <form method="POST" action="{{ route('customers.push-ont', $customer) }}" class="row g-2">
                             @csrf
                             <div class="col-md-6"><label class="form-label small">Template PPPoE</label><select class="form-select form-select-sm" name="pppoe_template_id"><option value="">Default router / global</option>
-                                @foreach ($templates->where('service_type', \App\Enums\ServiceType::Pppoe) as $t)<option value="{{ $t->id }}">{{ $t->name }}</option>@endforeach</select></div>
-                            <div class="col-md-6"><label class="form-label small">Template Hotspot</label><select class="form-select form-select-sm" name="hotspot_template_id"><option value="">Default router / global</option>
+                                @foreach ($templates->where('service_type', \App\Enums\ServiceType::Pppoe) as $t)<option value="{{ $t->id }}">{{ $t->name }}{{ filled($t->payload['hotspot'] ?? null) ? ' + Hotspot' : '' }}</option>@endforeach</select></div>
+                            <div class="col-md-6"><label class="form-label small">Template Hotspot (untuk "Hotspot saja")</label><select class="form-select form-select-sm" name="hotspot_template_id"><option value="">Default router / global</option>
                                 @foreach ($templates->where('service_type', \App\Enums\ServiceType::Bridge) as $t)<option value="{{ $t->id }}">{{ $t->name }}</option>@endforeach</select></div>
                             <div class="col-12 d-flex flex-wrap gap-2 mt-2">
-                                <button class="btn btn-primary btn-sm" name="service" value="pppoe"><i class="bi bi-lightning"></i> Push PPPoE</button>
-                                <button class="btn btn-outline-primary btn-sm" name="service" value="bridge"><i class="bi bi-wifi"></i> Push Hotspot</button>
-                                <button class="btn btn-outline-primary btn-sm" name="service" value="both"><i class="bi bi-layers"></i> PPPoE + Hotspot</button>
+                                <button class="btn btn-primary btn-sm" name="service" value="pppoe"><i class="bi bi-lightning"></i> Push PPPoE (+ Hotspot dari template)</button>
+                                <button class="btn btn-outline-primary btn-sm" name="service" value="bridge"><i class="bi bi-wifi"></i> Push Hotspot saja</button>
                             </div>
                         </form>
                         <hr>

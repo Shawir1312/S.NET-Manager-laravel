@@ -18,7 +18,7 @@
                 <tr>
                     <td>{{ $t->name }} @if ($t->is_default)<span class="badge text-bg-primary">default</span>@endif
                         <div class="small text-body-secondary">{{ $t->description }}</div></td>
-                    <td>{{ $t->service_type->label() }}@if (filled($t->payload['hotspot_template_id'] ?? null)) <span class="badge text-bg-info">+ Hotspot</span>@endif</td>
+                    <td>{{ $t->service_type->label() }}@if (filled($t->payload['hotspot'] ?? null)) <span class="badge text-bg-info">+ Hotspot</span>@endif</td>
                     <td>{{ $p['wan']['vlan_id'] ?? '-' }}</td>
                     <td>{{ strtoupper($p['wan']['slot'] ?? '-') }}</td>
                     <td>{{ collect($p['binding']['lan'] ?? [])->map(fn ($n) => 'LAN '.$n)->join(', ') ?: '-' }}</td>

@@ -8,7 +8,6 @@ use App\Services\Audit\AuditLogger;
 use App\Services\ONT\Mappers\WANMapper;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
@@ -31,7 +30,7 @@ class TemplateController extends Controller
     {
         Gate::authorize('manage-templates');
 
-        return view('templates.form', ['template' => new ConfigurationTemplate(['service_type' => ServiceType::Bridge, 'payload' => []]), 'hotspotTemplates' => $this->hotspotTemplates()]);
+        return view('templates.form', ['template' => new ConfigurationTemplate(['service_type' => ServiceType::Bridge, 'payload' => []])]);
     }
 
     public function store(Request $request): RedirectResponse
@@ -48,7 +47,7 @@ class TemplateController extends Controller
     {
         Gate::authorize('manage-templates');
 
-        return view('templates.form', ['template' => $template, 'hotspotTemplates' => $this->hotspotTemplates()]);
+        return view('templates.form', ['template' => $template]);
     }
 
     public function update(Request $request, ConfigurationTemplate $template): RedirectResponse
@@ -103,12 +102,6 @@ class TemplateController extends Controller
         }
     }
 
-    /** @return Collection<int, ConfigurationTemplate> */
-    private function hotspotTemplates(): Collection
-    {
-        return ConfigurationTemplate::where('service_type', ServiceType::Bridge->value)->orderBy('name')->get(['id', 'name']);
-    }
-
     private function validated(Request $request, ?ConfigurationTemplate $template = null): array
     {
         $d = $request->validate([
@@ -127,7 +120,17 @@ class TemplateController extends Controller
             'ssid_names' => ['array'], 'ssid_names.*' => ['nullable', 'string', 'max:32'],
             'wifi_security' => ['nullable', 'in:keep,open,password'],
             'wifi_key' => ['nullable', 'string', 'min:8', 'max:63'],
-            'hotspot_template_id' => ['nullable', 'integer', Rule::exists('configuration_templates', 'id')->where('service_type', ServiceType::Bridge->value)],
+            // Seksi Hotspot di dalam template PPPoE (PPPoE + Hotspot dalam satu template).
+            'hs_enabled' => ['sometimes', 'boolean'],
+            'hs_vlan_id' => ['nullable', 'required_if:hs_enabled,1', 'integer', 'between:1,4094'],
+            'hs_vlan_priority' => ['nullable', 'integer', 'between:0,7'],
+            'hs_service_list' => ['nullable', 'in:'.implode(',', WANMapper::SERVICE_LISTS)],
+            'hs_wan_name' => ['nullable', 'string', 'max:64', 'regex:/^[A-Za-z0-9_\- .]+$/'],
+            'hs_lan' => ['array'], 'hs_lan.*' => ['integer', 'between:1,8'],
+            'hs_wlan' => ['array'], 'hs_wlan.*' => ['integer', 'between:1,8'],
+            'hs_ssid_names' => ['array'], 'hs_ssid_names.*' => ['nullable', 'string', 'max:32'],
+            'hs_wifi_security' => ['nullable', 'in:keep,open,password'],
+            'hs_wifi_key' => ['nullable', 'string', 'min:8', 'max:63'],
         ]);
         // Keamanan WiFi hotspot: password disimpan TERENKRIPSI (bukan teks biasa); kosong saat edit = tidak diubah.
         $security = $d['service_type'] === 'bridge' ? ($d['wifi_security'] ?? 'keep') : 'keep';
@@ -136,14 +139,10 @@ class TemplateController extends Controller
             throw ValidationException::withMessages(['wifi_key' => 'Isi password WiFi hotspot (minimal 8 karakter).']);
         }
         $wlan = array_map('intval', $d['wlan'] ?? []);
-        // Nama SSID tetap per WLAN yang di-bind; boleh memakai {nama} = nama depan pelanggan.
-        $ssids = [];
-        foreach ($wlan as $n) {
-            if (filled($d['ssid_names'][$n] ?? null)) {
-                $ssids[] = ['index' => $n, 'ssid_name' => $d['ssid_names'][$n]];
-            }
-        }
+        $lan = array_map('intval', $d['lan'] ?? []);
+        $ssids = self::fixedSsids($wlan, $d['ssid_names'] ?? []);
         $pppoe = $d['service_type'] === 'pppoe';
+        $hotspot = $pppoe && $request->boolean('hs_enabled') ? $this->hotspotSection($d, $lan, $wlan, $template) : null;
 
         return [
             'name' => $d['name'],
@@ -159,12 +158,76 @@ class TemplateController extends Controller
                     'service_list' => $pppoe ? 'INTERNET' : $d['service_list'],
                     'nat_enabled' => $pppoe ? $request->boolean('nat_enabled', true) : null,
                 ],
-                'binding' => ['lan' => array_map('intval', $d['lan'] ?? []), 'wlan' => $wlan],
+                'binding' => ['lan' => $lan, 'wlan' => $wlan],
                 'ssids' => $ssids,
                 'wifi' => ['security' => $security, 'key_enc' => $security === 'password' ? $keyEnc : null],
-                // Template PPPoE boleh menyertakan layanan Hotspot: WAN hotspot ikut dipasang saat template ini dipakai.
-                'hotspot_template_id' => $pppoe && filled($d['hotspot_template_id'] ?? null) ? (int) $d['hotspot_template_id'] : null,
+                // PPPoE + Hotspot dalam satu template: WAN hotspot ikut dipasang saat template PPPoE ini dipakai.
+                'hotspot' => $hotspot,
             ],
+        ];
+    }
+
+    /**
+     * Nama SSID tetap per WLAN yang di-bind; boleh memakai {nama} = nama depan pelanggan.
+     *
+     * @param  list<int>  $wlan
+     * @param  array<int|string, ?string>  $names
+     * @return list<array{index: int, ssid_name: string}>
+     */
+    private static function fixedSsids(array $wlan, array $names): array
+    {
+        $ssids = [];
+        foreach ($wlan as $n) {
+            if (filled($names[$n] ?? null)) {
+                $ssids[] = ['index' => $n, 'ssid_name' => $names[$n]];
+            }
+        }
+
+        return $ssids;
+    }
+
+    /**
+     * Seksi hotspot template PPPoE. Port LAN/SSID dan VLAN-nya tidak boleh sama dengan PPPoE (satu interface hanya bisa di-bind ke satu WAN).
+     *
+     * @param  list<int>  $lan
+     * @param  list<int>  $wlan
+     * @return array<string, mixed>
+     */
+    private function hotspotSection(array $d, array $lan, array $wlan, ?ConfigurationTemplate $template): array
+    {
+        $hsLan = array_map('intval', $d['hs_lan'] ?? []);
+        $hsWlan = array_map('intval', $d['hs_wlan'] ?? []);
+        $errors = [];
+        if ($hsLan === [] && $hsWlan === []) {
+            $errors['hs_wlan'] = 'Pilih minimal satu LAN/SSID untuk hotspot.';
+        }
+        if ($both = array_intersect($lan, $hsLan)) {
+            $errors['hs_lan'] = 'LAN '.implode(', ', $both).' sudah dipakai PPPoE. Satu port hanya untuk satu layanan.';
+        }
+        if ($both = array_intersect($wlan, $hsWlan)) {
+            $errors['hs_wlan'] = 'SSID '.implode(', ', $both).' sudah dipakai PPPoE. Pilih SSID lain untuk hotspot (mis. SSID 2).';
+        }
+        if ((int) $d['hs_vlan_id'] === (int) $d['vlan_id']) {
+            $errors['hs_vlan_id'] = 'VLAN hotspot harus beda dengan VLAN PPPoE.';
+        }
+        $security = $d['hs_wifi_security'] ?? 'keep';
+        $keyEnc = filled($d['hs_wifi_key'] ?? null) ? Crypt::encryptString($d['hs_wifi_key']) : ($template?->payload['hotspot']['wifi']['key_enc'] ?? null);
+        if ($security === 'password' && blank($keyEnc)) {
+            $errors['hs_wifi_key'] = 'Isi password WiFi hotspot (minimal 8 karakter).';
+        }
+        if ($errors !== []) {
+            throw ValidationException::withMessages($errors);
+        }
+
+        return [
+            'wan' => [
+                'slot' => 'ip', 'name' => $d['hs_wan_name'] ?? null, 'vlan_id' => (int) $d['hs_vlan_id'],
+                'vlan_priority' => isset($d['hs_vlan_priority']) ? (int) $d['hs_vlan_priority'] : null,
+                'service_list' => $d['hs_service_list'] ?? 'INTERNET',
+            ],
+            'binding' => ['lan' => $hsLan, 'wlan' => $hsWlan],
+            'ssids' => self::fixedSsids($hsWlan, $d['hs_ssid_names'] ?? []),
+            'wifi' => ['security' => $security, 'key_enc' => $security === 'password' ? $keyEnc : null],
         ];
     }
 }

@@ -61,6 +61,19 @@ class ConfigurationTemplate extends Model
         };
     }
 
+    /** Seksi hotspot template PPPoE sebagai template Bridge sementara (tidak disimpan), atau null bila tidak ada. */
+    public function hotspotPart(): ?self
+    {
+        $hs = $this->service_type === ServiceType::Pppoe ? ($this->payload['hotspot'] ?? null) : null;
+        if (! $hs) {
+            return null;
+        }
+        $part = new self(['name' => $this->name.' — Hotspot', 'service_type' => ServiceType::Bridge, 'payload' => ['service_type' => ServiceType::Bridge->value] + $hs]);
+        $part->id = $this->id;
+
+        return $part;
+    }
+
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');

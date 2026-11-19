@@ -190,7 +190,7 @@ class CustomerController extends Controller
             'customer' => $customer,
             'device' => $device,
             'jobs' => $device ? ConfigurationJob::where('ont_device_id', $device->id)->with('user:id,name', 'template:id,name')->latest('id')->limit(10)->get() : collect(),
-            'templates' => ConfigurationTemplate::orderBy('name')->get(['id', 'name', 'service_type', 'is_default']),
+            'templates' => ConfigurationTemplate::orderBy('name')->get(['id', 'name', 'service_type', 'is_default', 'payload']),
         ]);
     }
 
@@ -247,12 +247,12 @@ class CustomerController extends Controller
         return back()->with('status', 'Status diubah ke '.$status.'.'.($ok ? '' : ' MikroTik tidak bisa dihubungi; RADIUS sudah diperbarui, sinkron ulang nanti.'));
     }
 
-    /** Tab Config ONT: push cepat PPPoE (+ Hotspot) memakai template. */
+    /** Tab Config ONT: push cepat PPPoE (+ Hotspot bila ada di template PPPoE) atau Hotspot saja. */
     public function pushOnt(Request $request, PppoeCustomer $customer, CustomerOntProvisioner $ont, RadiusSync $radius, ProvisioningService $provisioning): RedirectResponse
     {
         Gate::authorize('configure-ont');
         $d = $request->validate([
-            'service' => ['required', 'in:pppoe,bridge,both'],
+            'service' => ['required', 'in:pppoe,bridge'],
             'pppoe_template_id' => ['nullable', Rule::exists('configuration_templates', 'id')->where('service_type', 'pppoe')],
             'hotspot_template_id' => ['nullable', Rule::exists('configuration_templates', 'id')->where('service_type', 'bridge')],
         ]);
@@ -267,7 +267,7 @@ class CustomerController extends Controller
                 $template = $ont->templateFor($customer, ServiceType::Bridge, $d['hotspot_template_id'] ?? null);
                 $provisioning->start($device, $ont->buildInput($customer, $template, null), $request->user(), $template->id);
             } else {
-                $warnings = $ont->push($customer, $request->user(), $radius->passwordOf($customer->pppoe_username), $d['service'] === 'both', $d['pppoe_template_id'] ?? null, $d['hotspot_template_id'] ?? null)['warnings'];
+                $warnings = $ont->push($customer, $request->user(), $radius->passwordOf($customer->pppoe_username), $d['pppoe_template_id'] ?? null)['warnings'];
             }
         } catch (ProvisioningException $e) {
             return back()->withErrors(['ont' => $e->getMessage()]);
@@ -276,14 +276,12 @@ class CustomerController extends Controller
         return back()->with('tab', 'ont')->with('status', trim('Konfigurasi ONT diantrekan. Status diperbarui otomatis di bawah. '.implode(' ', $warnings)));
     }
 
-    /** @return array{push_ont: bool, with_hotspot: bool, pppoe_template_id: ?int, hotspot_template_id: ?int} */
+    /** @return array{push_ont: bool, pppoe_template_id: ?int} */
     private function options(Request $request): array
     {
         return [
             'push_ont' => $request->boolean('push_ont') && $request->user()->can('configure-ont'),
-            'with_hotspot' => $request->boolean('with_hotspot'),
             'pppoe_template_id' => $request->integer('pppoe_template_id') ?: null,
-            'hotspot_template_id' => $request->integer('hotspot_template_id') ?: null,
         ];
     }
 
@@ -299,7 +297,7 @@ class CustomerController extends Controller
         return [
             'routers' => Router::orderBy('name')->get(['id', 'name', 'default_vlan']),
             'profiles' => $profiles,
-            'templates' => ConfigurationTemplate::orderBy('name')->get(['id', 'name', 'service_type', 'is_default']),
+            'templates' => ConfigurationTemplate::orderBy('name')->get(['id', 'name', 'service_type', 'is_default', 'payload']),
         ];
     }
 

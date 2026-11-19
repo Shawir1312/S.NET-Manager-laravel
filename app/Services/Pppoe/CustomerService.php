@@ -41,7 +41,7 @@ class CustomerService
 
     /**
      * @param  array<string, mixed>  $data  data tervalidasi dari CustomerRequest
-     * @param  array{push_ont?: bool, with_hotspot?: bool, send_welcome?: bool, pppoe_template_id?: ?int, hotspot_template_id?: ?int}  $options
+     * @param  array{push_ont?: bool, send_welcome?: bool, pppoe_template_id?: ?int}  $options
      * @return array{customer: PppoeCustomer, notes: list<string>, job: ?ConfigurationJob}
      */
     public function create(array $data, User $by, array $options = []): array
@@ -96,7 +96,7 @@ class CustomerService
 
     /**
      * @param  array<string, mixed>  $data
-     * @param  array{push_ont?: bool, with_hotspot?: bool, pppoe_template_id?: ?int, hotspot_template_id?: ?int}  $options
+     * @param  array{push_ont?: bool, pppoe_template_id?: ?int}  $options
      * @return array{customer: PppoeCustomer, notes: list<string>, job: ?ConfigurationJob}
      */
     public function update(PppoeCustomer $customer, array $data, User $by, array $options = []): array
@@ -265,7 +265,7 @@ class CustomerService
         }
 
         try {
-            $r = $this->ont->push($customer, $by, $password, (bool) ($options['with_hotspot'] ?? false), $options['pppoe_template_id'] ?? null, $options['hotspot_template_id'] ?? null);
+            $r = $this->ont->push($customer, $by, $password, $options['pppoe_template_id'] ?? null);
             $notes[] = "Konfigurasi ONT {$customer->ont_sn} diantrekan. Pantau statusnya di tab Config ONT.";
             array_push($notes, ...$r['warnings']);
 

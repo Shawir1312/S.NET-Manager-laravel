@@ -107,20 +107,17 @@ class CustomerOntProvisioner
     }
 
     /**
-     * Push PPPoE (dan opsional Hotspot) ke ONT pelanggan. Job hotspot diantrekan
-     * setelah job PPPoE karena mesin hanya mengizinkan satu job aktif per ONT.
+     * Push PPPoE ke ONT pelanggan; bila template PPPoE punya seksi Hotspot, WAN hotspot ikut dipasang.
+     * Job hotspot diantrekan setelah job PPPoE karena mesin hanya mengizinkan satu job aktif per ONT.
      *
      * @return array{job: ConfigurationJob, warnings: list<string>}
      */
-    public function push(PppoeCustomer $customer, User $user, ?string $pppoePassword, bool $withHotspot = false, ?int $pppoeTemplateId = null, ?int $hotspotTemplateId = null): array
+    public function push(PppoeCustomer $customer, User $user, ?string $pppoePassword, ?int $pppoeTemplateId = null): array
     {
         $device = $this->findDevice($customer);
         $pppoeTemplate = $this->templateFor($customer, ServiceType::Pppoe, $pppoeTemplateId);
-        // Template PPPoE yang menyertakan layanan Hotspot otomatis ikut memasang WAN hotspot-nya.
-        $linkedHotspot = $pppoeTemplate->payload['hotspot_template_id'] ?? null;
-        $hotspotTemplate = $withHotspot || $linkedHotspot
-            ? $this->templateFor($customer, ServiceType::Bridge, $withHotspot ? $hotspotTemplateId : (int) $linkedHotspot)
-            : null;
+        // PPPoE + Hotspot dalam satu template: port/SSID keduanya sudah dicek tidak bentrok saat template disimpan.
+        $hotspotTemplate = $pppoeTemplate->hotspotPart();
 
         // Port/SSID template yang tidak ada di ONT ini dilewati; yang ada tetap diterapkan.
         [$pppoeInput, $skipped] = $this->provisioning->fitInterfaces($device, $this->buildInput($customer, $pppoeTemplate, $pppoePassword));

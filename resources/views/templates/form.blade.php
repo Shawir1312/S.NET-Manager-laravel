@@ -66,16 +66,49 @@
                 <div class="form-text">Berlaku untuk semua SSID yang di-bind di template hotspot ini. Password disimpan terenkripsi.</div>
             </div>
         </div>
+        @php($hs = $p['hotspot'] ?? null)
+        @php($hsNames = collect($hs['ssids'] ?? [])->pluck('ssid_name', 'index'))
         <div class="col-12" id="pppoeHotspotBox">
             <div class="p-3 rounded border bg-light">
-                <div class="form-label fw-semibold mb-2"><i class="bi bi-broadcast-pin me-1 text-primary"></i>Tambahan Layanan Hotspot</div>
-                <select class="form-select" name="hotspot_template_id" style="max-width: 420px;">
-                    <option value="">Tanpa hotspot (PPPoE saja)</option>
-                    @foreach ($hotspotTemplates as $h)
-                        <option value="{{ $h->id }}" @selected((int) old('hotspot_template_id', $p['hotspot_template_id'] ?? 0) === $h->id)>{{ $h->name }}</option>
-                    @endforeach
-                </select>
-                <div class="form-text">Bila dipilih, setiap ONT yang memakai template PPPoE ini otomatis juga dipasang WAN Hotspot (VLAN, SSID, keamanan WiFi dari template hotspot tersebut).</div>
+                <div class="form-check form-switch mb-2">
+                    <input type="hidden" name="hs_enabled" value="0">
+                    <input class="form-check-input" type="checkbox" role="switch" name="hs_enabled" value="1" id="hsEnabled" @checked(old('hs_enabled', $hs !== null))>
+                    <label class="form-check-label fw-semibold" for="hsEnabled"><i class="bi bi-broadcast-pin me-1 text-primary"></i>Tambahan Layanan Hotspot (PPPoE + Hotspot dalam satu template)</label>
+                </div>
+                <div id="hsFields" class="row g-3">
+                    <div class="col-md-3"><label class="form-label">VLAN Hotspot *</label><input class="form-control" type="number" min="1" max="4094" name="hs_vlan_id" value="{{ old('hs_vlan_id', $hs['wan']['vlan_id'] ?? '') }}"></div>
+                    <div class="col-md-3"><label class="form-label">VLAN Priority</label><input class="form-control" type="number" min="0" max="7" name="hs_vlan_priority" value="{{ old('hs_vlan_priority', $hs['wan']['vlan_priority'] ?? '') }}"></div>
+                    <div class="col-md-3"><label class="form-label">Service List</label>
+                        <select class="form-select" name="hs_service_list">
+                            @foreach (\App\Services\ONT\Mappers\WANMapper::SERVICE_LISTS as $sl)
+                                <option value="{{ $sl }}" @selected(old('hs_service_list', $hs['wan']['service_list'] ?? 'INTERNET') === $sl)>{{ $sl }}</option>
+                            @endforeach
+                        </select></div>
+                    <div class="col-md-3"><label class="form-label">WAN Name</label><input class="form-control" name="hs_wan_name" maxlength="64" value="{{ old('hs_wan_name', $hs['wan']['name'] ?? '') }}" placeholder="otomatis"></div>
+                    <div class="col-md-4"><div class="form-label">LAN Hotspot</div>
+                        @foreach (range(1, 4) as $n)
+                            <div class="form-check form-check-inline"><input class="form-check-input" type="checkbox" name="hs_lan[]" value="{{ $n }}" id="hslan{{ $n }}" @checked(in_array($n, old('hs_lan', $hs['binding']['lan'] ?? [])))><label class="form-check-label" for="hslan{{ $n }}">LAN {{ $n }}</label></div>
+                        @endforeach</div>
+                    <div class="col-md-8"><div class="form-label">SSID Hotspot</div>
+                        @foreach (range(1, 8) as $n)
+                            <div class="form-check form-check-inline"><input class="form-check-input" type="checkbox" name="hs_wlan[]" value="{{ $n }}" id="hswlan{{ $n }}" @checked(in_array($n, old('hs_wlan', $hs['binding']['wlan'] ?? [])))><label class="form-check-label" for="hswlan{{ $n }}">SSID {{ $n }}</label></div>
+                        @endforeach
+                        <div class="form-text">Port/SSID yang dicentang di PPPoE otomatis dikunci di sini (tidak boleh dobel).</div></div>
+                    <div class="col-12"><div class="form-label">Nama SSID Hotspot</div>
+                        <div class="row g-2">
+                            @foreach (range(1, 8) as $n)
+                                <div class="col-6 col-md-3"><div class="input-group input-group-sm"><span class="input-group-text">SSID {{ $n }}</span>
+                                    <input class="form-control" name="hs_ssid_names[{{ $n }}]" maxlength="32" value="{{ old('hs_ssid_names.'.$n, $hsNames[$n] ?? '') }}" placeholder="mis. S.NET @Hotspot"></div></div>
+                            @endforeach
+                        </div></div>
+                    @php($hsWifi = $hs['wifi'] ?? [])
+                    <div class="col-12"><div class="form-label">Keamanan WiFi Hotspot</div>
+                        @foreach (['keep' => 'Biarkan seperti di ONT', 'open' => 'Tanpa password (terbuka)', 'password' => 'Pakai password (WPA2)'] as $v => $l)
+                            <div class="form-check form-check-inline"><input class="form-check-input" type="radio" name="hs_wifi_security" value="{{ $v }}" id="hsws_{{ $v }}" @checked(old('hs_wifi_security', $hsWifi['security'] ?? 'open') === $v)><label class="form-check-label" for="hsws_{{ $v }}">{{ $l }}</label></div>
+                        @endforeach
+                        <input class="form-control mt-2" style="max-width: 360px;" type="password" name="hs_wifi_key" id="hsWifiKey" minlength="8" maxlength="63" autocomplete="new-password"
+                               placeholder="{{ filled($hsWifi['key_enc'] ?? null) ? 'Tersimpan (terenkripsi) — kosongkan jika tidak diubah' : 'Password WiFi hotspot, min. 8 karakter' }}"></div>
+                </div>
             </div>
         </div>
         <script>
@@ -84,9 +117,22 @@
                 const sync = () => {
                     box.style.display = type.value === 'bridge' ? '' : 'none';
                     document.getElementById('pppoeHotspotBox').style.display = type.value === 'pppoe' ? '' : 'none';
+                    document.getElementById('hsFields').style.display = document.getElementById('hsEnabled').checked ? '' : 'none';
+                    document.getElementById('hsWifiKey').style.display = document.querySelector('[name=hs_wifi_security]:checked')?.value === 'password' ? '' : 'none';
+                    // Port/SSID yang dipakai PPPoE tidak bisa dipilih untuk hotspot (dan sebaliknya).
+                    for (const kind of ['lan', 'wlan']) {
+                        document.querySelectorAll(`[name="${kind}[]"]`).forEach(main => {
+                            const hs = document.querySelector(`[name="hs_${kind}[]"][value="${main.value}"]`);
+                            if (!hs) return;
+                            const pppoeOnly = type.value === 'pppoe';
+                            hs.disabled = pppoeOnly && main.checked;
+                            main.disabled = pppoeOnly && document.getElementById('hsEnabled').checked && hs.checked;
+                        });
+                    }
                     keyBox.style.display = document.querySelector('[name=wifi_security]:checked')?.value === 'password' ? '' : 'none';
                 };
                 type.addEventListener('change', sync);
+                document.querySelectorAll('#hsEnabled, [name=hs_wifi_security], [name="lan[]"], [name="wlan[]"], [name="hs_lan[]"], [name="hs_wlan[]"]').forEach(el => el.addEventListener('change', sync));
                 document.querySelectorAll('[name=wifi_security]').forEach(r => r.addEventListener('change', sync));
                 sync();
             })();

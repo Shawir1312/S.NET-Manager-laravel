@@ -56,10 +56,8 @@
                         <label class="form-check-label fw-semibold" for="pushOnt">Konfigurasi ONT otomatis</label></div>
                         <div class="form-text">Pakai mesin provisioning (preview, backup, verifikasi, rollback).</div></div>
                     <div class="col-md-4 field-hide"><label class="form-label">Template PPPoE</label><select class="form-select" name="pppoe_template_id"><option value="">Default router / global</option>
-                        @foreach ($templates->where('service_type', \App\Enums\ServiceType::Pppoe) as $t)<option value="{{ $t->id }}" @selected((int) old('pppoe_template_id') === $t->id)>{{ $t->name }}{{ $t->is_default ? ' (default)' : '' }}</option>@endforeach</select></div>
-                    <div class="col-md-4 field-hide"><div class="form-check"><input class="form-check-input" type="checkbox" name="with_hotspot" value="1" id="withHotspot" @checked(old('with_hotspot'))><label class="form-check-label" for="withHotspot">Tambah WAN Hotspot</label></div>
-                        <select class="form-select form-select-sm mt-1" name="hotspot_template_id"><option value="">Default router / global</option>
-                        @foreach ($templates->where('service_type', \App\Enums\ServiceType::Bridge) as $t)<option value="{{ $t->id }}" @selected((int) old('hotspot_template_id') === $t->id)>{{ $t->name }}{{ $t->is_default ? ' (default)' : '' }}</option>@endforeach</select></div>
+                        @foreach ($templates->where('service_type', \App\Enums\ServiceType::Pppoe) as $t)<option value="{{ $t->id }}" @selected((int) old('pppoe_template_id') === $t->id)>{{ $t->name }}{{ filled($t->payload['hotspot'] ?? null) ? ' + Hotspot' : '' }}{{ $t->is_default ? ' (default)' : '' }}</option>@endforeach</select></div>
+                    <div class="col-md-4 field-hide d-flex align-items-end"><div class="form-text"><i class="bi bi-broadcast-pin me-1"></i>Hotspot ikut terpasang bila template PPPoE punya seksi Hotspot.</div></div>
                 @endcan
                 @unless ($edit)
                     <div class="col-12"><div class="form-check"><input class="form-check-input" type="checkbox" name="send_welcome" value="1" id="sendWelcome" @checked(old('send_welcome', true))><label class="form-check-label" for="sendWelcome">Kirim WA selamat datang + akun portal</label></div></div>

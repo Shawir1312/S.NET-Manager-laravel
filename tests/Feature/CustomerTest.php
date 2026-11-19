@@ -56,10 +56,9 @@ class CustomerTest extends TestCase
     {
         (new StatefulGenieAcs($this->fiberhomeDoc()))->fake();
         // VLAN 100 sudah dipakai WAN TR069 di ONT contoh -> hotspot pakai VLAN lain.
-        $hotspot = ConfigurationTemplate::where('service_type', 'bridge')->firstOrFail();
-        $hotspot->update(['payload' => array_replace_recursive($hotspot->payload, ['wan' => ['vlan_id' => 300]])]);
+        $this->pppoeWithHotspot(300);
 
-        $this->actingAs($this->operator)->post('/customers', $this->form(['push_ont' => 1, 'with_hotspot' => 1]))
+        $this->actingAs($this->operator)->post('/customers', $this->form(['push_ont' => 1]))
             ->assertRedirect()->assertSessionHasNoErrors();
 
         $c = PppoeCustomer::where('pppoe_username', 'budisantoso@snet')->firstOrFail();
@@ -79,27 +78,38 @@ class CustomerTest extends TestCase
         $this->assertSame('budisantoso@snet', $jobs[0]->request_payload['wan']['pppoe_username']);
         $this->assertSame('success', $jobs[0]->status->value);
         $this->assertStringNotContainsString('12345678', json_encode($jobs->pluck('request_payload')));
+
+        // Hotspot dari seksi template PPPoE: SSID 2 + LAN 2, tidak menyentuh SSID 1/LAN 1 milik PPPoE.
+        $this->assertSame(['lan' => [2], 'wlan' => [2]], $jobs[1]->request_payload['binding']);
+        $this->assertSame([1], $jobs[0]->request_payload['binding']['wlan']);
+        $this->assertSame('S.NET @Hotspot', $jobs[1]->request_payload['ssids'][0]['ssid_name']);
+        $this->assertSame(300, $jobs[1]->request_payload['wan']['vlan_id']);
     }
 
-    public function test_pppoe_template_with_linked_hotspot_adds_hotspot_wan_automatically(): void
+    public function test_pppoe_template_without_hotspot_section_pushes_pppoe_only(): void
     {
         (new StatefulGenieAcs($this->fiberhomeDoc()))->fake();
-        $hotspot = ConfigurationTemplate::where('service_type', 'bridge')->firstOrFail();
-        $hotspot->update(['payload' => array_replace_recursive($hotspot->payload, ['wan' => ['vlan_id' => 300]])]);
-        $pppoe = ConfigurationTemplate::where('service_type', 'pppoe')->firstOrFail();
-        $pppoe->update(['payload' => ['hotspot_template_id' => $hotspot->id] + $pppoe->payload]);
-
-        // Tanpa centang "Tambah WAN Hotspot": hotspot tetap ikut karena disertakan di template PPPoE.
         $this->actingAs($this->operator)->post('/customers', $this->form(['push_ont' => 1]))->assertSessionHasNoErrors();
+        $this->assertSame([ServiceType::Pppoe], ConfigurationJob::pluck('service_type')->all());
+    }
 
-        $this->assertSame([ServiceType::Pppoe, ServiceType::Bridge], ConfigurationJob::orderBy('id')->pluck('service_type')->all());
+    /** Template PPPoE yang dipakai pelanggan (PPPoE HOME: LAN 1 & SSID 1) diberi seksi hotspot SSID 2 + LAN 2. */
+    private function pppoeWithHotspot(int $vlan): void
+    {
+        $pppoe = ConfigurationTemplate::where('name', 'PPPoE HOME')->firstOrFail();
+        $pppoe->update(['is_default' => true, 'payload' => $pppoe->payload + ['hotspot' => [
+            'wan' => ['slot' => 'ip', 'vlan_id' => $vlan, 'service_list' => 'INTERNET', 'vlan_priority' => null, 'name' => null],
+            'binding' => ['lan' => [2], 'wlan' => [2]], 'ssids' => [['index' => 2, 'ssid_name' => 'S.NET @Hotspot']],
+            'wifi' => ['security' => 'open', 'key_enc' => null],
+        ]]]);
     }
 
     public function test_conflicting_hotspot_is_reported_not_silently_dropped(): void
     {
-        (new StatefulGenieAcs($this->fiberhomeDoc()))->fake(); // template hotspot bawaan VLAN 100 = bentrok dengan WAN TR069
+        (new StatefulGenieAcs($this->fiberhomeDoc()))->fake();
+        $this->pppoeWithHotspot(100); // VLAN 100 = bentrok dengan WAN TR069 di ONT contoh
 
-        $this->actingAs($this->operator)->post('/customers', $this->form(['push_ont' => 1, 'with_hotspot' => 1]))
+        $this->actingAs($this->operator)->post('/customers', $this->form(['push_ont' => 1]))
             ->assertSessionHas('status', fn ($m) => str_contains($m, 'Hotspot tidak diantrekan') && str_contains($m, 'VLAN 100'));
         $this->assertSame(1, ConfigurationJob::count());
     }
