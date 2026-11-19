@@ -140,8 +140,9 @@ class TemplateController extends Controller
         }
         $wlan = array_map('intval', $d['wlan'] ?? []);
         $lan = array_map('intval', $d['lan'] ?? []);
-        $ssids = self::fixedSsids($wlan, $d['ssid_names'] ?? []);
         $pppoe = $d['service_type'] === 'pppoe';
+        // PPPoE: nama & password WiFi diisi di form pelanggan, jadi template tidak menyimpan nama SSID.
+        $ssids = $pppoe ? [] : self::fixedSsids($wlan, $d['ssid_names'] ?? []);
         $hotspot = $pppoe && $request->boolean('hs_enabled') ? $this->hotspotSection($d, $lan, $wlan, $template) : null;
 
         return [

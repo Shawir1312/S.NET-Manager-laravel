@@ -73,12 +73,12 @@ class CustomerOntProvisioner
 
         $ssids = [];
         foreach ($p['binding']['wlan'] ?? [] as $index) {
-            $fixed = $fixedNames[$index] ?? null;
-            // SSID dengan nama tetap (hotspot) tidak diberi password pelanggan; hotspot memakai keamanan dari template.
-            $password = $fixed === null && $isPppoe ? ($customer->ont_wifi_pass ?: null) : null;
+            // PPPoE: nama & password WiFi selalu dari form pelanggan. Hotspot: nama tetap & keamanan dari template.
+            $fixed = $isPppoe ? null : ($fixedNames[$index] ?? null);
+            $password = $isPppoe ? ($customer->ont_wifi_pass ?: null) : null;
             $ssids[] = [
                 'index' => (int) $index,
-                'ssid_name' => $fixed !== null ? str_replace('{nama}', $firstName, $fixed) : ($customer->ont_wifi_ssid ?: null),
+                'ssid_name' => $fixed !== null ? str_replace('{nama}', $firstName, $fixed) : ($isPppoe ? ($customer->ont_wifi_ssid ?: null) : null),
                 'password' => $isPppoe ? $password : $hotspotPassword,
                 'security' => $isPppoe ? ($password ? '11i' : null) : $hotspotSecurity, // WPA2-PSK; mesin wajib tahu mode saat password diubah
                 'enabled' => true, 'hidden' => null,

@@ -51,7 +51,7 @@ class AdminPagesTest extends TestCase
         // Satu default per jenis layanan: default Hotspot (seeder) tetap ada.
         $this->assertSame(1, ConfigurationTemplate::where('is_default', true)->where('service_type', 'pppoe')->count());
         $this->assertSame(1, ConfigurationTemplate::where('is_default', true)->where('service_type', 'bridge')->count());
-        $this->assertSame([['index' => 2, 'ssid_name' => 'S.NET @Hotspot']], $t->payload['ssids']);
+        $this->assertSame([], $t->payload['ssids'], 'nama SSID PPPoE diisi di form pelanggan, bukan template');
         $this->assertStringNotContainsString('jangan-disimpan', json_encode($t->payload));
         $this->assertSame([1, 2], $t->payload['binding']['lan']);
         $this->assertSame(['lan' => [3], 'wlan' => [3]], $t->payload['hotspot']['binding'], 'template PPPoE menyertakan layanan hotspot');

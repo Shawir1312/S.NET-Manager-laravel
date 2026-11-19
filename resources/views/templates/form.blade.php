@@ -41,14 +41,15 @@
             @endforeach
             <div class="form-text">Interface yang tidak ada di ONT otomatis diabaikan saat template dipakai.</div></div>
         @php($ssidNames = collect($p['ssids'] ?? [])->pluck('ssid_name', 'index'))
-        <div class="col-12"><div class="form-label">Nama SSID (opsional, untuk SSID yang di-bind)</div>
+        <div class="col-12" id="pppoeWifiNote"><div class="alert alert-light border small mb-0"><i class="bi bi-wifi me-1"></i>Nama &amp; password WiFi PPPoE diisi di <strong>form pendaftaran pelanggan</strong>. SSID hotspot diatur di seksi Hotspot di bawah.</div></div>
+        <div class="col-12" id="ssidNamesBox"><div class="form-label">Nama SSID (opsional, untuk SSID yang di-bind)</div>
             <div class="row g-2">
                 @foreach (range(1, 8) as $n)
                     <div class="col-6 col-md-3"><div class="input-group input-group-sm"><span class="input-group-text">SSID {{ $n }}</span>
                         <input class="form-control" name="ssid_names[{{ $n }}]" maxlength="32" value="{{ old('ssid_names.'.$n, $ssidNames[$n] ?? '') }}"></div></div>
                 @endforeach
             </div>
-            <div class="form-text">Kosongkan = pakai nama WiFi pelanggan. <code>{nama}</code> diganti nama depan pelanggan, mis. <code>S.NET - {nama}</code>. Hotspot: isi nama tetap, mis. <code>S.NET @Hotspot</code> atau <code>S.NET - {nama}</code> ({nama} = nama yang diisi saat setting ONT hotspot). Password PPPoE/WiFi pelanggan tidak pernah disimpan di template.</div></div>
+            <div class="form-text">Isi nama tetap, mis. <code>S.NET @Hotspot</code> atau <code>S.NET - {nama}</code> ({nama} = nama yang diisi saat setting ONT hotspot). Kosong = nama SSID di ONT tidak diubah.</div></div>
         @php($wifi = $p['wifi'] ?? [])
         <div class="col-12" id="hotspotWifiBox">
             <div class="p-3 rounded border bg-light">
@@ -117,6 +118,8 @@
                 const sync = () => {
                     box.style.display = type.value === 'bridge' ? '' : 'none';
                     document.getElementById('pppoeHotspotBox').style.display = type.value === 'pppoe' ? '' : 'none';
+                    document.getElementById('pppoeWifiNote').style.display = type.value === 'pppoe' ? '' : 'none';
+                    document.getElementById('ssidNamesBox').style.display = type.value === 'pppoe' ? 'none' : '';
                     document.getElementById('hsFields').style.display = document.getElementById('hsEnabled').checked ? '' : 'none';
                     document.getElementById('hsWifiKey').style.display = document.querySelector('[name=hs_wifi_security]:checked')?.value === 'password' ? '' : 'none';
                     // Port/SSID yang dipakai PPPoE tidak bisa dipilih untuk hotspot (dan sebaliknya).

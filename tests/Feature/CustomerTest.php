@@ -128,6 +128,8 @@ class CustomerTest extends TestCase
         $this->assertSame([['index' => 2, 'ssid_name' => 'S.NET @Hotspot Siti', 'password' => null, 'security' => null, 'enabled' => true, 'hidden' => null]], $hs['ssids']);
         $this->assertSame(300, $hs['wan']['vlan_id']);
 
+        // Nama tetap lama di template PPPoE diabaikan: WiFi PPPoE selalu dari form pelanggan.
+        $pppoe->payload = $pppoe->payload + ['ssids' => [['index' => 1, 'ssid_name' => 'NAMA TEMPLATE']]];
         $pp = $ont->buildInput($customer, $pppoe, 'pw');
         $this->assertSame('Rumah Siti', $pp['ssids'][0]['ssid_name']);
         $this->assertSame('wifisiti99', $pp['ssids'][0]['password']);
