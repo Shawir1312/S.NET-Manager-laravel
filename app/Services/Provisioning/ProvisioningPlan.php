@@ -43,13 +43,14 @@ final class ProvisioningPlan
 
     /**
      * @param  list<array{path: string, value: mixed, type: string, key: string, secret?: bool}>  $values
+     * @param  bool  $optional  bila ONT menolak langkah ini, job lanjut dan berakhir "sebagian" (bukan gagal total)
      */
-    public function setValues(array $values, string $description): void
+    public function setValues(array $values, string $description, bool $optional = false): void
     {
         if ($values === []) {
             return;
         }
-        $this->steps[] = ['type' => 'set_values', 'values' => array_values($values), 'description' => $description];
+        $this->steps[] = ['type' => 'set_values', 'values' => array_values($values), 'description' => $description] + ($optional ? ['optional' => true] : []);
     }
 
     public function value(string $path, mixed $value, string $type, string $key, bool $verified, bool $secret = false): array

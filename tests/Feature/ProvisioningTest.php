@@ -358,4 +358,25 @@ class ProvisioningTest extends TestCase
         $this->actingAs($this->tech)->postJson("/api/configuration/{$id}/rollback")->assertOk();
         $this->assertFalse((bool) $sim->doc['InternetGatewayDevice']['LANDevice']['1']['LANEthernetInterfaceConfig']['2']['Enable']['_value'][0]);
     }
+
+    public function test_huawei_port_rejected_by_ont_is_skipped_and_job_is_partial(): void
+    {
+        config(['ontconfig.provisioning_mode' => 'production']);
+        $model = OntModel::where('product_class', 'HS8145C5')->first();
+        $model->update(['status' => ModelSupportStatus::Supported]);
+        $model->parameterMappings()->update(['verified' => true]);
+        $this->device->update(['genieacs_id' => '00259E-HS8145C5-485754439C31B89F', 'serial_number' => '485754439C31B89F']);
+        $sim = (new StatefulGenieAcs($this->fiberhomeDoc(['_id' => '00259E-HS8145C5-485754439C31B89F', '_deviceId' => ['_Manufacturer' => 'Huawei Technologies Co., Ltd', '_OUI' => '00259E', '_ProductClass' => 'HS8145C5', '_SerialNumber' => '485754439C31B89F']])))->fake();
+        $sim->faultOnPathSuffix = 'Lan2Enable';
+
+        $id = $this->actingAs($this->tech)->postJson('/api/ont/configure', $this->input())->assertStatus(202)->json('id');
+        $status = $this->actingAs($this->tech)->getJson("/api/configuration/{$id}/status")->json();
+
+        $this->assertSame('partial', $status['status'], json_encode($status['timeline']));
+        $this->assertSame('OPTIONAL_REJECTED', $status['error_code']);
+        $this->assertStringContainsString('Binding LAN 2', $status['error_message']);
+        $bound = collect($sim->tasks)->where('name', 'setParameterValues')->flatMap(fn ($t) => array_column($t['parameterValues'], 0));
+        $this->assertTrue($bound->contains(fn ($p) => str_ends_with($p, 'Lan1Enable')), 'port lain tetap di-bind');
+        $this->assertTrue($bound->contains(fn ($p) => str_ends_with($p, 'SSID1Enable')));
+    }
 }

@@ -195,10 +195,11 @@ class DriverPlanTest extends TestCase
 
         $v = $this->values($plan);
         $this->assertTrue($v['wan.ppp.bind_lan1']);
-        $this->assertFalse($v['wan.ppp.bind_lan2']);
+        $this->assertArrayNotHasKey('wan.ppp.bind_lan2', $v, 'WAN baru: flag false tidak dikirim (default sudah off)');
         $this->assertTrue($v['wan.ppp.bind_lan3']);
         $this->assertTrue($v['wan.ppp.bind_ssid2']);
-        $this->assertFalse($v['wan.ppp.bind_ssid1']);
+        $this->assertArrayNotHasKey('wan.ppp.bind_ssid1', $v);
+        $this->assertTrue(collect($plan->steps)->where('type', 'set_values')->filter(fn ($s) => str_contains($s['description'], 'flag per port'))->every(fn ($s) => ($s['optional'] ?? false) && count($s['values']) === 1), 'satu port per langkah, opsional');
         $this->assertArrayNotHasKey('wan.ppp.binding', $v);
         $this->assertSame('X_HW_VLAN', substr(collect($plan->allValues())->firstWhere('key', 'wan.ppp.vlan_id')['path'], -9));
         OntDevice::query()->delete();

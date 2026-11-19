@@ -220,19 +220,28 @@ abstract class AbstractDriver implements ONTInterface
 
                 return;
             }
-            $values = [];
-            foreach ([1, 2, 3, 4] as $n) {
-                if ($ctx->hasMapping("wan.{$s}.bind_lan{$n}") && ONTValidator::interfaceExists($ctx, 'lan', $n)) {
-                    $values[] = $this->val($ctx, $plan, "wan.{$s}.bind_lan{$n}", $vars, in_array($n, $lan, true));
-                }
-                if ($ctx->hasMapping("wan.{$s}.bind_ssid{$n}") && ONTValidator::interfaceExists($ctx, 'wlan', $n)) {
-                    $values[] = $this->val($ctx, $plan, "wan.{$s}.bind_ssid{$n}", $vars, in_array($n, $wlan, true));
+            // Satu flag per perintah: Huawei menolak SELURUH perintah (cwmp.9002) bila satu port tak bisa di-bind
+            // (mis. sudah terikat ke WAN lain). Per port → port lain tetap ter-bind & port yang ditolak jelas.
+            // WAN baru: flag bawaan semua false, jadi hanya port terpilih yang dikirim (true).
+            $any = false;
+            foreach (['lan' => ['LAN', $lan], 'ssid' => ['SSID', $wlan]] as $kind => [$label, $selected]) {
+                foreach ([1, 2, 3, 4] as $n) {
+                    $type = $kind === 'lan' ? 'lan' : 'wlan';
+                    if (! $ctx->hasMapping("wan.{$s}.bind_{$kind}{$n}") || ! ONTValidator::interfaceExists($ctx, $type, $n)) {
+                        continue;
+                    }
+                    $any = true;
+                    $on = in_array($n, $selected, true);
+                    if ($wan->isNew && ! $on) {
+                        continue;
+                    }
+                    $plan->setValues([$this->val($ctx, $plan, "wan.{$s}.bind_{$kind}{$n}", $vars, $on)],
+                        ($on ? 'Binding ' : 'Lepas binding ')."{$label} {$n} (flag per port)", optional: true);
                 }
             }
-            if ($values === []) {
+            if (! $any) {
                 throw new ParameterUnavailableException("wan.{$s}.bind_lan1", $ctx->modelLabel());
             }
-            $plan->setValues($values, 'Binding LAN/WLAN (flag per port)');
 
             return;
         }

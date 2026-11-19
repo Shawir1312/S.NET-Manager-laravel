@@ -24,6 +24,9 @@ class StatefulGenieAcs
     /** Nama task yang dibuat fault (mis. 'setParameterValues'). */
     public ?string $faultOn = null;
 
+    /** Fault untuk setParameterValues yang memuat path berakhiran ini (mis. 'Lan2Enable'). */
+    public ?string $faultOnPathSuffix = null;
+
     /** Parameter bawaan untuk objek baru, per nama objek (mis. 'WANPPPConnection' => [...]), seperti ONT asli. */
     public array $newObjectParams = [];
 
@@ -64,7 +67,9 @@ class StatefulGenieAcs
 
                 return Http::response(['_id' => $id] + $task, 202);
             }
-            if ($this->faultOn === $task['name']) {
+            $faultPath = $this->faultOnPathSuffix !== null && $task['name'] === 'setParameterValues'
+                && collect($task['parameterValues'])->contains(fn ($v) => str_ends_with($v[0], $this->faultOnPathSuffix));
+            if ($this->faultOn === $task['name'] || $faultPath) {
                 $this->pending[$id] = 'fault';
 
                 return Http::response(['_id' => $id] + $task, 202);

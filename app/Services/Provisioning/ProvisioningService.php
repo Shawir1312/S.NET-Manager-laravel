@@ -281,6 +281,7 @@ class ProvisioningService
         $markers = [];
         $createdWanPath = null;
         $applied = [];
+        $rejected = [];
         $taskIds = [];
         foreach ($p['plan']->steps as $step) {
             if ($step['type'] === 'ensure_instance') {
@@ -317,9 +318,20 @@ class ProvisioningService
                 $this->history($job, 'add_object', 'success', "{$step['description']}: {$parent}.{$new[0]}");
             } else {
                 $values = array_map(fn ($v) => ['path' => strtr($v['path'], $markers)] + $v, $step['values']);
-                $r = $acs->setParameterValues($id, array_map(fn ($v) => [$v['path'], $v['value'], $v['type']], $values));
-                $taskIds[] = $r['task_id'];
-                $this->assertTask($job, $r, 'SET_VALUES_FAILED', $step['description']);
+                try {
+                    $r = $acs->setParameterValues($id, array_map(fn ($v) => [$v['path'], $v['value'], $v['type']], $values));
+                    $taskIds[] = $r['task_id'];
+                    $this->assertTask($job, $r, 'SET_VALUES_FAILED', $step['description']);
+                } catch (ProvisioningException $e) {
+                    if (! ($step['optional'] ?? false)) {
+                        throw $e;
+                    }
+                    // Langkah opsional (mis. binding satu port) ditolak ONT: catat, lanjutkan port lain.
+                    $rejected[] = $step['description'];
+                    $this->history($job, 'set_values', 'warning', "{$step['description']} ditolak ONT, dilewati: {$e->getMessage()}");
+
+                    continue;
+                }
                 array_push($applied, ...$values);
                 // Hanya perubahan yang sudah diterapkan ONT yang boleh di-rollback.
                 $job->backups()->whereIn('parameter_path', array_column($values, 'path'))->update(['applied' => true]);
@@ -355,6 +367,11 @@ class ProvisioningService
             $bad === [] ? 'Verifikasi: semua parameter cocok dengan yang dikirim.' : count($bad).' parameter tidak cocok setelah dibaca ulang.',
             ['results' => $results]);
 
+        if ($bad === [] && $rejected !== []) {
+            $this->finish($job, JobStatus::Partial, 'Konfigurasi diterapkan, tetapi ditolak ONT: '.implode('; ', $rejected).'.', 'OPTIONAL_REJECTED');
+
+            return;
+        }
         $bad === []
             ? $this->finish($job, JobStatus::Success, 'Konfigurasi berhasil diterapkan dan diverifikasi.')
             : $this->finish($job, JobStatus::Partial, 'Konfigurasi terkirim, tetapi sebagian parameter tidak cocok saat diverifikasi.', 'VERIFY_MISMATCH');
