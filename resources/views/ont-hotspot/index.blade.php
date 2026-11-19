@@ -239,7 +239,8 @@
         $('snSummary').style.display = 'flex';
         $('snSummaryValue').textContent = presetSn.toUpperCase();
         $('btnChangeSn').addEventListener('click', () => { $('snEntry').style.display = ''; $('snSummary').style.display = 'none'; $('snInput').focus(); });
-        search();
+        // Tunggu semua script layout (escHtml dari snet/app.js) termuat; script halaman ini jalan lebih dulu.
+        document.addEventListener('DOMContentLoaded', () => search());
     }
     $('btnSearch').addEventListener('click', () => search());
     $('snInput').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); search(); } });
