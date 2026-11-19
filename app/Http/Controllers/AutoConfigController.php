@@ -39,7 +39,7 @@ class AutoConfigController extends Controller
                 'first_name' => Str::before(trim($customer->full_name).' ', ' '),
                 'pppoe_username' => $isPppoe ? $customer->pppoe_username : null,
                 'pppoe_password' => $isPppoe ? $radius->passwordOf($customer->pppoe_username) : null,
-                'vlan_id' => $isPppoe ? $customer->ont_vlan : null,
+                'vlan_id' => $isPppoe ? ($customer->ont_vlan ?: ($template?->payload['wan']['vlan_id'] ?? null)) : null,
                 'wifi_ssid' => $isPppoe ? $customer->ont_wifi_ssid : null,
                 'wifi_pass' => $isPppoe ? $customer->ont_wifi_pass : null,
             ];

@@ -159,7 +159,7 @@ class CustomerController extends Controller
         $router = Router::find($request->integer('router_id')) ?? Router::orderBy('name')->first();
 
         return view('customers.form', [
-            'customer' => new PppoeCustomer(['router_id' => $router?->id, 'due_day' => 1, 'status' => 'active', 'ont_vlan' => $router?->default_vlan ?? 100]),
+            'customer' => new PppoeCustomer(['router_id' => $router?->id, 'due_day' => 1, 'status' => 'active', 'ont_vlan' => null]),
             'suggestedPassword' => CustomerService::randomPassword(),
         ] + $this->formOptions($router));
     }
@@ -295,7 +295,7 @@ class CustomerController extends Controller
         }
 
         return [
-            'routers' => Router::orderBy('name')->get(['id', 'name', 'default_vlan']),
+            'routers' => Router::orderBy('name')->get(['id', 'name']),
             'profiles' => $profiles,
             'templates' => ConfigurationTemplate::orderBy('name')->get(['id', 'name', 'service_type', 'is_default', 'payload']),
         ];

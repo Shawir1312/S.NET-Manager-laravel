@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\ConfigurationTemplate;
 use App\Models\GenieAcsSetting;
 use App\Models\HotspotProfile;
 use App\Models\PppoeCustomer;
@@ -37,7 +36,7 @@ class RouterController extends Controller
     {
         Gate::authorize('manage-settings');
 
-        return view('routers.form', ['router' => new Router(['api_port' => 8728, 'api_user' => 'admin', 'status' => 'active', 'default_vlan' => 100, 'nas_ip' => '0.0.0.0/0'])] + $this->options());
+        return view('routers.form', ['router' => new Router(['api_port' => 8728, 'api_user' => 'admin', 'status' => 'active', 'nas_ip' => '0.0.0.0/0'])] + $this->options());
     }
 
     public function store(Request $request): RedirectResponse
@@ -129,7 +128,6 @@ class RouterController extends Controller
     {
         return [
             'genieServers' => GenieAcsSetting::orderBy('name')->get(['id', 'name', 'nbi_url']),
-            'templates' => ConfigurationTemplate::orderBy('name')->get(['id', 'name', 'service_type']),
         ];
     }
 
@@ -147,9 +145,6 @@ class RouterController extends Controller
             'location' => ['nullable', 'string', 'max:500'],
             'status' => ['required', 'in:active,inactive'],
             'genie_acs_setting_id' => ['nullable', 'exists:genieacs_settings,id'],
-            'default_vlan' => ['required', 'integer', 'between:1,4094'],
-            'pppoe_template_id' => ['nullable', Rule::exists('configuration_templates', 'id')->where('service_type', 'pppoe')],
-            'hotspot_template_id' => ['nullable', Rule::exists('configuration_templates', 'id')->where('service_type', 'bridge')],
         ]);
         if (blank($d['api_password'] ?? null)) {
             unset($d['api_password']); // edit: kosong = tidak diubah

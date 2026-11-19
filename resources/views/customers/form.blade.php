@@ -10,7 +10,7 @@
         <div class="col-lg-6">
             <div class="card h-100"><div class="card-header"><i class="bi bi-person"></i> Data pelanggan</div><div class="card-body row g-3">
                 <div class="col-12"><label class="form-label">Router *</label><select class="form-select" name="router_id" id="routerId" required>
-                    @foreach ($routers as $r)<option value="{{ $r->id }}" data-vlan="{{ $r->default_vlan }}" @selected((int) old('router_id', $customer->router_id) === $r->id)>{{ $r->name }}</option>@endforeach</select>
+                    @foreach ($routers as $r)<option value="{{ $r->id }}" @selected((int) old('router_id', $customer->router_id) === $r->id)>{{ $r->name }}</option>@endforeach</select>
                     @if ($routers->isEmpty())<div class="form-text text-danger">Belum ada router. Tambahkan di menu Router & NAS.</div>@endif</div>
                 <div class="col-12"><label class="form-label">Nama lengkap *</label><input class="form-control form-control-lg" name="full_name" id="fullName" value="{{ old('full_name', $customer->full_name) }}" required maxlength="150"></div>
                 <div class="col-md-6"><label class="form-label">No. WhatsApp</label><input class="form-control" name="phone" inputmode="tel" value="{{ old('phone', $customer->phone) }}" placeholder="08xxxxxxxxxx"></div>
@@ -46,7 +46,7 @@
                     <button class="btn btn-outline-dark" type="button" id="btnScanSn" title="Scan QR / barcode SN" aria-label="Scan SN pakai kamera"><i class="bi bi-qr-code-scan"></i></button></div>
                     <div id="snScanBox" class="mt-2" style="display:none;"><div id="snReader" class="rounded overflow-hidden border"></div>
                         <button class="btn btn-sm btn-outline-danger w-100 mt-1" type="button" id="btnStopSn">Tutup Kamera</button></div></div>
-                <div class="col-md-2"><label class="form-label">VLAN PPPoE</label><input class="form-control" type="number" min="1" max="4094" name="ont_vlan" id="ontVlan" value="{{ old('ont_vlan', $customer->ont_vlan) }}"></div>
+                <div class="col-md-2"><label class="form-label">VLAN PPPoE</label><input class="form-control" type="number" min="1" max="4094" name="ont_vlan" id="ontVlan" value="{{ old('ont_vlan', $customer->ont_vlan ?: null) }}" placeholder="ikut template"></div>
                 <div class="col-md-3"><label class="form-label">Nama WiFi</label><input class="form-control" name="ont_wifi_ssid" id="wifiSsid" maxlength="32" value="{{ old('ont_wifi_ssid', $customer->ont_wifi_ssid) }}" placeholder="otomatis: S.NET - Nama"></div>
                 <div class="col-md-3"><label class="form-label">Password WiFi (min. 8)</label><input class="form-control font-monospace" name="ont_wifi_pass" minlength="8" maxlength="63" value="{{ old('ont_wifi_pass') }}" placeholder="{{ $edit ? 'kosong = tetap' : '= password PPPoE' }}" autocomplete="new-password"></div>
 
@@ -55,7 +55,7 @@
                     <div class="col-md-4"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" role="switch" name="push_ont" value="1" id="pushOnt" @checked(old('push_ont', ! $edit))>
                         <label class="form-check-label fw-semibold" for="pushOnt">Konfigurasi ONT otomatis</label></div>
                         <div class="form-text">Pakai mesin provisioning (preview, backup, verifikasi, rollback).</div></div>
-                    <div class="col-md-4 field-hide"><label class="form-label">Template PPPoE</label><select class="form-select" name="pppoe_template_id"><option value="">Default router / global</option>
+                    <div class="col-md-4 field-hide"><label class="form-label">Template PPPoE</label><select class="form-select" name="pppoe_template_id"><option value="">Template default</option>
                         @foreach ($templates->where('service_type', \App\Enums\ServiceType::Pppoe) as $t)<option value="{{ $t->id }}" @selected((int) old('pppoe_template_id') === $t->id)>{{ $t->name }}{{ filled($t->payload['hotspot'] ?? null) ? ' + Hotspot' : '' }}{{ $t->is_default ? ' (default)' : '' }}</option>@endforeach</select></div>
                     <div class="col-md-4 field-hide d-flex align-items-end"><div class="form-text"><i class="bi bi-broadcast-pin me-1"></i>Hotspot ikut terpasang bila template PPPoE punya seksi Hotspot.</div></div>
                 @endcan
@@ -87,7 +87,6 @@
     const syncFree = () => { price.readOnly = $('isFree').checked; if ($('isFree').checked) price.value = 0; };
     $('isFree').addEventListener('change', syncFree); syncFree();
     $('btnRandom').addEventListener('click', () => { $('pppoePass').value = String(Math.floor(10000000 + Math.random() * 90000000)); });
-    $('routerId').addEventListener('change', (e) => { if (!isEdit) $('ontVlan').value = e.target.selectedOptions[0].dataset.vlan || $('ontVlan').value; });
     if (!isEdit) {
         // Username otomatis dari nama, sama seperti S.NET lama: "budisantoso@snet".
         $('fullName').addEventListener('input', (e) => {

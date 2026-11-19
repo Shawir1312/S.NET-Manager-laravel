@@ -89,8 +89,10 @@ class CustomerTest extends TestCase
     public function test_pppoe_template_without_hotspot_section_pushes_pppoe_only(): void
     {
         (new StatefulGenieAcs($this->fiberhomeDoc()))->fake();
-        $this->actingAs($this->operator)->post('/customers', $this->form(['push_ont' => 1]))->assertSessionHasNoErrors();
+        // VLAN PPPoE dikosongkan di form = ikut VLAN template PPPoE (PPPoE HOME: 200).
+        $this->actingAs($this->operator)->post('/customers', $this->form(['push_ont' => 1, 'ont_vlan' => null]))->assertSessionHasNoErrors();
         $this->assertSame([ServiceType::Pppoe], ConfigurationJob::pluck('service_type')->all());
+        $this->assertSame(200, ConfigurationJob::first()->request_payload['wan']['vlan_id']);
     }
 
     /** Template PPPoE yang dipakai pelanggan (PPPoE HOME: LAN 1 & SSID 1) diberi seksi hotspot SSID 2 + LAN 2. */

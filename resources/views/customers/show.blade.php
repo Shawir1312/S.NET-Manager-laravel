@@ -29,7 +29,7 @@
             @foreach ([
                 'No. WhatsApp' => $customer->phone ?: '-', 'Alamat' => $customer->address ?: '-', 'Paket' => $customer->profile,
                 'Tagihan' => $customer->is_free ? 'Gratis' : 'Rp '.number_format($customer->monthly_price, 0, ',', '.').' · jatuh tempo tgl '.$customer->due_day,
-                'Username portal' => $customer->portal_username ?: '-', 'SN ONT' => $customer->ont_sn ?: '-', 'VLAN' => $customer->ont_vlan,
+                'Username portal' => $customer->portal_username ?: '-', 'SN ONT' => $customer->ont_sn ?: '-', 'VLAN' => $customer->ont_vlan ?: 'ikut template',
                 'Nama WiFi' => $customer->ont_wifi_ssid ?: '-',
                 'Isolir' => $customer->isolated_at ? $customer->isolated_at->format('d M Y H:i').' — '.$customer->isolated_reason : '-',
                 'Catatan' => $customer->notes ?: '-',
@@ -65,9 +65,9 @@
                     <div class="card h-100"><div class="card-header">Konfigurasi</div><div class="card-body">
                         <form method="POST" action="{{ route('customers.push-ont', $customer) }}" class="row g-2">
                             @csrf
-                            <div class="col-md-6"><label class="form-label small">Template PPPoE</label><select class="form-select form-select-sm" name="pppoe_template_id"><option value="">Default router / global</option>
+                            <div class="col-md-6"><label class="form-label small">Template PPPoE</label><select class="form-select form-select-sm" name="pppoe_template_id"><option value="">Template default</option>
                                 @foreach ($templates->where('service_type', \App\Enums\ServiceType::Pppoe) as $t)<option value="{{ $t->id }}">{{ $t->name }}{{ filled($t->payload['hotspot'] ?? null) ? ' + Hotspot' : '' }}</option>@endforeach</select></div>
-                            <div class="col-md-6"><label class="form-label small">Template Hotspot (untuk "Hotspot saja")</label><select class="form-select form-select-sm" name="hotspot_template_id"><option value="">Default router / global</option>
+                            <div class="col-md-6"><label class="form-label small">Template Hotspot (untuk "Hotspot saja")</label><select class="form-select form-select-sm" name="hotspot_template_id"><option value="">Template default</option>
                                 @foreach ($templates->where('service_type', \App\Enums\ServiceType::Bridge) as $t)<option value="{{ $t->id }}">{{ $t->name }}</option>@endforeach</select></div>
                             <div class="col-12 d-flex flex-wrap gap-2 mt-2">
                                 <button class="btn btn-primary btn-sm" name="service" value="pppoe"><i class="bi bi-lightning"></i> Push PPPoE (+ Hotspot dari template)</button>

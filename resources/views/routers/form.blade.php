@@ -63,34 +63,16 @@
                     <input type="text" class="form-control" name="location" value="{{ old('location', $router->location) }}" placeholder="Contoh: Gedung A Lantai 2">
                 </div>
 
-                <div class="col-12"><hr class="my-1"><small class="text-success fw-bold"><i class="bi bi-hdd-network me-1"></i>Integrasi Auto-Provisioning ONT (GenieACS TR-069)</small></div>
+                @if ($genieServers->count() > 1)
                 <div class="col-md-6">
                     <label class="form-label">Server GenieACS Cabang Ini</label>
                     <select class="form-select" name="genie_acs_setting_id">
                         <option value="">-- Gunakan Server Default / Utama --</option>
                         @foreach ($genieServers as $g)<option value="{{ $g->id }}" @selected((int) old('genie_acs_setting_id', $router->genie_acs_setting_id) === $g->id)>{{ $g->name }} ({{ $g->nbi_url }})</option>@endforeach
                     </select>
-                    <div class="form-text">Server GenieACS yang mengelola ONT di area / cabang router ini.</div>
+                    <div class="form-text">Hanya muncul bila ada lebih dari satu server GenieACS.</div>
                 </div>
-                <div class="col-md-6">
-                    <label class="form-label">Default VLAN ID Pelanggan</label>
-                    <input type="number" class="form-control font-mono fw-bold" name="default_vlan" value="{{ old('default_vlan', $router->default_vlan ?? 100) }}" placeholder="100" min="1" max="4094">
-                    <div class="form-text">VLAN ID default yang otomatis terisi saat menambah pelanggan di router ini.</div>
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label">Template ONT PPPoE</label>
-                    <select class="form-select" name="pppoe_template_id">
-                        <option value="">-- Template default global --</option>
-                        @foreach ($templates->where('service_type', \App\Enums\ServiceType::Pppoe) as $t)<option value="{{ $t->id }}" @selected((int) old('pppoe_template_id', $router->pppoe_template_id) === $t->id)>{{ $t->name }}</option>@endforeach
-                    </select>
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label">Template ONT Hotspot</label>
-                    <select class="form-select" name="hotspot_template_id">
-                        <option value="">-- Template default global --</option>
-                        @foreach ($templates->where('service_type', \App\Enums\ServiceType::Bridge) as $t)<option value="{{ $t->id }}" @selected((int) old('hotspot_template_id', $router->hotspot_template_id) === $t->id)>{{ $t->name }}</option>@endforeach
-                    </select>
-                </div>
+                @endif
                 <div class="col-md-6">
                     <label class="form-label">Status</label>
                     <select class="form-select" name="status">

@@ -42,13 +42,11 @@ class CustomerOntProvisioner
         return OntDevice::findOrFail($devices[0]['id']);
     }
 
-    /** Template yang dipakai: pilihan form -> default router -> default global per jenis. */
+    /** Template yang dipakai: pilihan form -> template default per jenis (menu Template ONT). */
     public function templateFor(PppoeCustomer $customer, ServiceType $type, ?int $templateId = null): ConfigurationTemplate
     {
-        $routerTemplateId = $type === ServiceType::Pppoe ? $customer->router?->pppoe_template_id : $customer->router?->hotspot_template_id;
-
         $template = ConfigurationTemplate::where('service_type', $type->value)
-            ->whereKey($templateId ?? $routerTemplateId)->first()
+            ->whereKey($templateId)->first()
             ?? ConfigurationTemplate::where('service_type', $type->value)->orderByDesc('is_default')->orderBy('id')->first();
 
         if (! $template) {
