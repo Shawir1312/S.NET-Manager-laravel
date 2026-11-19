@@ -41,6 +41,7 @@
                     <div class="text-center mt-2"><button class="btn btn-sm btn-outline-danger" type="button" id="btnStopScan"><i class="bi bi-x-circle me-1"></i>Tutup Kamera</button></div>
                     <div class="form-text text-center">Arahkan kamera ke QR code atau barcode SN di label ONT. Kamera butuh HTTPS &amp; izin browser.</div>
                 </div>
+                <div id="scanRaw" class="small text-muted mt-2 text-break"></div>
                 <div id="searchResult" class="mt-3"></div>
             </div>
         </div>
@@ -103,13 +104,23 @@
 
     const alertBox = (tone, html) => `<div class="alert alert-${tone} py-2 mb-0">${html}</div>`;
 
-    // Ambil SN dari isi QR/barcode: pola SN GPON (4 huruf + 8 hex), "SN:xxx", atau token alfanumerik terpanjang.
-    function extractSn(text) {
+    // GPON SN hex 16 karakter (mis. label Huawei 4857544379FC699D) → bentuk PON di ACS (HWTC79FC699D).
+    function hexToPon(h) {
+        if (!/^[0-9A-F]{16}$/.test(h)) return null;
+        const vendor = h.slice(0, 8).match(/../g).map(b => String.fromCharCode(parseInt(b, 16))).join('');
+        return /^[A-Z]{4}$/.test(vendor) ? vendor + h.slice(8) : null;
+    }
+
+    // Kandidat SN dari isi QR/barcode (bisa berisi SN perangkat, MAC, dll.), urut dari yang paling mungkin GPON SN.
+    function snCandidates(text) {
         const t = String(text).toUpperCase();
-        return (t.match(/\b[A-Z]{4}[0-9A-F]{8}\b/) || [])[0]
-            || (t.match(/S\/?N\s*[:=]?\s*([A-Z0-9]{8,20})/) || [])[1]
-            || (t.match(/[A-Z0-9]{8,20}/g) || []).sort((a, b) => b.length - a.length)[0]
-            || t.trim();
+        const out = [];
+        for (let i = 0; i + 16 <= t.length; i++) { const p = hexToPon(t.slice(i, i + 16)); if (p) out.push(p); }
+        (t.match(/[A-Z]{4}[0-9A-F]{8}/g) || []).forEach(x => out.push(x));
+        const labeled = (t.match(/S\/?N\s*[:=]?\s*([A-Z0-9]{8,24})/) || [])[1];
+        if (labeled) out.push(hexToPon(labeled) || labeled);
+        (t.match(/[A-Z0-9]{8,24}/g) || []).sort((a, b) => b.length - a.length).forEach(x => out.push(hexToPon(x) || x));
+        return [...new Set(out)].slice(0, 5);
     }
 
     async function startScan() {
@@ -118,9 +129,11 @@
         scanner = new Html5Qrcode('qrReader');
         try {
             await scanner.start({ facingMode: 'environment' }, { fps: 10, qrbox: { width: 260, height: 160 } }, decoded => {
-                $('snInput').value = extractSn(decoded);
+                const candidates = snCandidates(decoded);
+                $('snInput').value = candidates[0] || String(decoded).trim();
+                $('scanRaw').textContent = 'Terbaca dari kamera: ' + String(decoded).slice(0, 120);
                 stopScan();
-                search();
+                search(candidates);
             });
         } catch (e) {
             $('scanBox').style.display = 'none';
@@ -166,19 +179,27 @@
         }
     }
 
-    async function search() {
-        const sn = $('snInput').value.trim().toUpperCase();
-        if (sn.length < 6) { OntApp.toast('Isi SN ONT terlebih dahulu.', 'warning'); return; }
-        $('snInput').value = sn;
+    // candidates: kandidat SN dari scan; ketik manual = satu kandidat (hex Huawei diubah ke bentuk PON).
+    async function search(candidates = null) {
+        const typed = $('snInput').value.trim().toUpperCase().replace(/\s+/g, '');
+        const list = Array.isArray(candidates) && candidates.length ? candidates : [hexToPon(typed) || typed];
+        if (list[0].length < 6) { OntApp.toast('Isi SN ONT terlebih dahulu.', 'warning'); return; }
+        if (!Array.isArray(candidates)) $('scanRaw').textContent = '';
         $('progressCard').style.display = 'none';
-        $('searchResult').innerHTML = alertBox('info', '<span class="spinner-border spinner-border-sm me-2"></span>Mencari ONT di GenieACS…');
         try {
-            const body = { serial_number: sn };
-            if ($('serverSelect')) body.genie_server_id = Number($('serverSelect').value);
-            const r = await OntApp.api(URL_SEARCH, { method: 'POST', body });
+            let r = null;
+            for (const sn of list) {
+                $('snInput').value = sn;
+                $('searchResult').innerHTML = alertBox('info', '<span class="spinner-border spinner-border-sm me-2"></span>Mencari ONT ' + escHtml(sn) + ' di GenieACS…');
+                const body = { serial_number: sn };
+                if ($('serverSelect')) body.genie_server_id = Number($('serverSelect').value);
+                r = await OntApp.api(URL_SEARCH, { method: 'POST', body });
+                if (r.devices && r.devices.length) break;
+            }
             if (!r.devices || r.devices.length === 0) {
                 $('deviceCard').style.display = 'none'; $('stepApply').style.display = 'none';
-                $('searchResult').innerHTML = alertBox('warning', escHtml(r.message));
+                const tried = list.length > 1 ? '<div class="small mt-1">Dicoba: ' + list.map(escHtml).join(', ') + '. Pastikan yang di-scan barcode <strong>GPON SN / PON SN</strong>, bukan SN perangkat.</div>' : '';
+                $('searchResult').innerHTML = alertBox('warning', escHtml(r.message) + tried);
                 return;
             }
             if (r.devices.length > 1) {
@@ -251,7 +272,7 @@
 
     $('btnScan').addEventListener('click', startScan);
     $('btnStopScan').addEventListener('click', stopScan);
-    $('btnSearch').addEventListener('click', search);
+    $('btnSearch').addEventListener('click', () => search());
     $('snInput').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); search(); } });
     $('btnApply').addEventListener('click', apply);
     $('nameInput').addEventListener('input', renderPreview);
