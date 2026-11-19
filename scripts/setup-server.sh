@@ -39,7 +39,11 @@ if [ "$WEB_USER" = "root" ]; then
     chown -R "$WEB_USER":"$WEB_USER" "$APP_DIR"
 fi
 PHP_BIN="$(command -v php8.3 || command -v php || echo /usr/bin/php)"
-[ -x /www/server/php/83/bin/php ] && PHP_BIN=/www/server/php/83/bin/php
+# aaPanel: pakai PHP >= 8.3 tertinggi yang terpasang di /www/server/php/<versi>/bin/php.
+for v in 85 84 83; do [ -x "/www/server/php/$v/bin/php" ] && PHP_BIN="/www/server/php/$v/bin/php" && break; done
+# aaPanel menonaktifkan proc_open/putenv dll. di php.ini (ikut ke CLI); untuk perintah CLI kita aktifkan kembali.
+PHP_CLI=("$PHP_BIN" -d disable_functions= -d open_basedir= -d memory_limit=1024M)
+php_ok() { "${PHP_CLI[@]}" -r 'exit(version_compare(PHP_VERSION, "8.3.0", ">=") ? 0 : 1);' 2>/dev/null; }
 DB_FILE="$APP_DIR/storage/app/setup-db.json"
 
 apt_install() { apt-get install -y -q "$@" >/dev/null 2>&1 || { apt-get update -q >/dev/null 2>&1; apt-get install -y -q "$@" >/dev/null 2>&1; }; }
@@ -70,8 +74,8 @@ step_base() {
 
 step_php() {
     if [ "$AAPANEL" -eq 1 ]; then
-        [ -x /www/server/php/83/bin/php ] && ok "PHP 8.3 aaPanel terdeteksi." || warn "aaPanel: pasang PHP 8.3 lewat App Store aaPanel (ekstensi: fileinfo, sodium, bcmath, curl, mbstring)."
-        return
+        php_ok && { ok "PHP $("${PHP_CLI[@]}" -r 'echo PHP_VERSION;') aaPanel dipakai: $PHP_BIN"; return; }
+        die "PHP 8.3 belum terpasang di aaPanel (yang terdeteksi: $(ls /www/server/php 2>/dev/null | tr '\n' ' ')). Pasang lewat aaPanel → App Store → PHP 8.3, lalu jalankan ulang skrip ini."
     fi
     if "$PHP_BIN" -r 'exit(version_compare(PHP_VERSION, "8.3.0", ">=") ? 0 : 1);' 2>/dev/null; then
         info "PHP $("$PHP_BIN" -r 'echo PHP_VERSION;') sudah ada, melengkapi ekstensi…"
@@ -87,6 +91,7 @@ step_php() {
     fi
     apt_install php8.3-cli php8.3-fpm php8.3-mysql php8.3-mbstring php8.3-xml php8.3-curl php8.3-zip php8.3-bcmath php8.3-intl php8.3-gd
     PHP_BIN="$(command -v php8.3 || command -v php)"
+    PHP_CLI=("$PHP_BIN" -d disable_functions= -d open_basedir= -d memory_limit=1024M)
     "$PHP_BIN" -r 'exit(version_compare(PHP_VERSION, "8.3.0", ">=") ? 0 : 1);' && ok "PHP $("$PHP_BIN" -r 'echo PHP_VERSION;') siap." || die "PHP 8.3 gagal dipasang."
 }
 
@@ -129,13 +134,19 @@ EOF
 
 step_composer() {
     if [ -f "$APP_DIR/vendor/autoload.php" ]; then ok "Dependensi PHP (vendor) sudah ada."; return; fi
+    php_ok || die "PHP 8.3 tidak ditemukan ($PHP_BIN). Pasang PHP 8.3 dulu."
     if ! command -v composer >/dev/null; then
         info "Memasang Composer…"
-        curl -fsSL https://getcomposer.org/installer -o /tmp/composer-setup.php && "$PHP_BIN" /tmp/composer-setup.php --install-dir=/usr/local/bin --filename=composer >/dev/null && rm -f /tmp/composer-setup.php
+        curl -fsSL https://getcomposer.org/installer -o /tmp/composer-setup.php && "${PHP_CLI[@]}" /tmp/composer-setup.php --install-dir=/usr/local/bin --filename=composer >/dev/null && rm -f /tmp/composer-setup.php
     fi
     info "composer install (1–5 menit)…"
-    sudo -u "$WEB_USER" -H env COMPOSER_HOME="$APP_DIR/storage/app/composer-home" "$PHP_BIN" "$(command -v composer)" install --no-dev --optimize-autoloader --no-interaction --working-dir="$APP_DIR" >/dev/null 2>&1 \
-        && ok "Dependensi PHP terpasang." || die "composer install gagal. Coba manual: cd $APP_DIR && composer install --no-dev"
+    mkdir -p "$APP_DIR/storage/app/composer-home" && chown -R "$WEB_USER":"$WEB_USER" "$APP_DIR/storage"
+    local out
+    if out="$(sudo -u "$WEB_USER" env HOME="$APP_DIR/storage/app/composer-home" COMPOSER_HOME="$APP_DIR/storage/app/composer-home" "${PHP_CLI[@]}" "$(command -v composer)" install --no-dev --optimize-autoloader --no-interaction --no-progress --working-dir="$APP_DIR" 2>&1)"; then
+        ok "Dependensi PHP terpasang."
+    else
+        echo "$out" | tail -25; die "composer install gagal (lihat pesan di atas)."
+    fi
 }
 
 step_mysql() {
@@ -304,7 +315,7 @@ After=network.target mariadb.service mysql.service
 User=$WEB_USER
 Group=$WEB_USER
 WorkingDirectory=$APP_DIR
-ExecStart=$PHP_BIN $APP_DIR/artisan queue:work --sleep=3 --tries=1 --max-time=3600
+ExecStart=${PHP_CLI[*]} $APP_DIR/artisan queue:work --sleep=3 --tries=1 --max-time=3600
 Restart=always
 RestartSec=5
 [Install]
@@ -315,7 +326,7 @@ EOF
 }
 
 step_cron() {
-    echo "* * * * * $WEB_USER cd $APP_DIR && $PHP_BIN artisan schedule:run >> /dev/null 2>&1" > /etc/cron.d/snet-manager
+    echo "* * * * * $WEB_USER cd $APP_DIR && ${PHP_CLI[*]} artisan schedule:run >> /dev/null 2>&1" > /etc/cron.d/snet-manager
     chmod 644 /etc/cron.d/snet-manager
     ok "Cron scheduler terpasang (/etc/cron.d/snet-manager)."
 }
@@ -338,8 +349,13 @@ step_permissions() {
     mkdir -p "$APP_DIR"/storage/{app,logs} "$APP_DIR"/storage/framework/{cache,sessions,views} "$APP_DIR/bootstrap/cache"
     chown -R "$WEB_USER":"$WEB_USER" "$APP_DIR/storage" "$APP_DIR/bootstrap/cache" "$APP_DIR/wa-service"
     chown "$WEB_USER":"$WEB_USER" "$APP_DIR"
+    # Upload lewat file manager sering membuat semua file 777 — rapikan ke 755/644 (storage & cache tetap bisa ditulis).
+    find "$APP_DIR" -path "$APP_DIR/vendor" -prune -o -path "$APP_DIR/wa-service/node_modules" -prune -o -type d -exec chmod 755 {} + 2>/dev/null
+    find "$APP_DIR" -path "$APP_DIR/vendor" -prune -o -path "$APP_DIR/wa-service/node_modules" -prune -o -type f -exec chmod 644 {} + 2>/dev/null
+    chmod 755 "$APP_DIR/artisan" "$APP_DIR/scripts/setup-server.sh"
     chmod -R ug+rwX "$APP_DIR/storage" "$APP_DIR/bootstrap/cache"
-    ok "Hak akses folder storage/ & bootstrap/cache/ untuk $WEB_USER."
+    [ -f "$APP_DIR/.env" ] && chmod 640 "$APP_DIR/.env"
+    ok "Hak akses folder dirapikan (755/644; storage & bootstrap/cache bisa ditulis $WEB_USER)."
 }
 
 case "$STEP" in

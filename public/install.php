@@ -59,13 +59,31 @@ function requirements(string $base): array
     return $checks;
 }
 
+/**
+ * Cek file/perintah di luar folder aplikasi. Dengan open_basedir aktif (Anti-XSS aaPanel) PHP tidak boleh
+ * menyentuh /etc, /usr, dll., jadi pengecekan dilakukan lewat perintah `test` (proses terpisah, tidak terkena open_basedir).
+ */
+function sysFile(string $path, string $flag = 'f'): bool
+{
+    if ((string) ini_get('open_basedir') === '') {
+        return $flag === 'x' ? @is_executable($path) : @is_file($path);
+    }
+
+    return sh(['test', '-'.$flag, $path], 5)[0] === 0;
+}
+
+function phpCli(): string
+{
+    return sysFile(PHP_BINDIR.'/php', 'x') ? PHP_BINDIR.'/php' : 'php';
+}
+
 function findComposer(string $base): ?array
 {
     if (is_file($base.'/composer.phar')) {
-        return [is_executable(PHP_BINDIR.'/php') ? PHP_BINDIR.'/php' : 'php', $base.'/composer.phar'];
+        return [phpCli(), $base.'/composer.phar'];
     }
     foreach (array_merge(explode(PATH_SEPARATOR, (string) getenv('PATH')), ['/usr/local/bin', '/usr/bin', '/opt/homebrew/bin']) as $dir) {
-        if ($dir !== '' && is_executable($dir.'/composer')) {
+        if ($dir !== '' && sysFile($dir.'/composer', 'x')) {
             return [$dir.'/composer'];
         }
     }
@@ -123,7 +141,7 @@ function serviceActive(string $unit): bool
 function hasBin(string ...$paths): bool
 {
     foreach ($paths as $p) {
-        if (@is_executable($p)) {
+        if (sysFile($p, 'x')) {
             return true;
         }
     }
@@ -146,7 +164,7 @@ function portOpen(string $host, int $port): bool
 /** Web user boleh menjalankan pemasang server (root) lewat sudo tanpa password? */
 function canAutoSetup(): bool
 {
-    return PHP_OS_FAMILY === 'Linux' && is_file(SETUP_BIN) && sh(['sudo', '-n', SETUP_BIN, 'check'], 15)[0] === 0;
+    return PHP_OS_FAMILY === 'Linux' && sysFile(SETUP_BIN) && sh(['sudo', '-n', SETUP_BIN, 'check'], 15)[0] === 0;
 }
 
 /**
@@ -175,10 +193,10 @@ function services(string $base): array
             'ok' => hasBin('/usr/bin/node', '/usr/local/bin/node') && serviceActive('snet-wa'),
             'detail' => 'Notifikasi tagihan & chat (snet-wa)'],
         ['key' => 'queue', 'label' => 'Queue Worker', 'step' => 'queue',
-            'ok' => is_file('/etc/systemd/system/snet-queue.service') && ($envInstalled ? serviceActive('snet-queue') : true),
+            'ok' => sysFile('/etc/systemd/system/snet-queue.service') && ($envInstalled ? serviceActive('snet-queue') : true),
             'detail' => 'Menjalankan proses config ONT di latar belakang'],
         ['key' => 'cron', 'label' => 'Cron Scheduler', 'step' => 'cron',
-            'ok' => is_file('/etc/cron.d/snet-manager'),
+            'ok' => sysFile('/etc/cron.d/snet-manager'),
             'detail' => 'Voucher kadaluarsa, isolir, pengingat WA, backup'],
         ['key' => 'sudo', 'label' => 'Izin sistem aplikasi (sudo)', 'step' => 'sudoers',
             'ok' => canAutoSetup(),
@@ -454,7 +472,7 @@ $err = fn (string $k) => isset($errors[$k]) ? '<div class="invalid-feedback">'.h
         <?php if ($result[0] ?? false) { ?>
             <div class="alert alert-success"><i class="bi bi-check-circle-fill me-1"></i><strong>Instalasi berhasil!</strong> Silakan login dengan akun admin yang baru dibuat.</div>
             <pre class="log"><?= h($result[1]) ?></pre>
-            <?php if (is_file('/etc/cron.d/snet-manager')) { ?>
+            <?php if (sysFile('/etc/cron.d/snet-manager')) { ?>
                 <div class="alert alert-light border small"><i class="bi bi-check2-all text-success me-1"></i>Cron scheduler, FreeRADIUS, WireGuard, WhatsApp &amp; queue worker sudah dipasang dan disambungkan otomatis oleh skrip setup server.</div>
             <?php } else { ?>
                 <div class="sec-title">Langkah terakhir di server (sekali saja)</div>
