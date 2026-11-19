@@ -13,6 +13,7 @@ use App\Models\WaTemplate;
 use App\Services\Mikrotik\MikrotikConnection;
 use App\Services\Mikrotik\MikrotikConnector;
 use App\Services\Mikrotik\MikrotikException;
+use App\Services\Pppoe\CustomerLiveStatus;
 use App\Services\Pppoe\CustomerOntProvisioner;
 use App\Services\Pppoe\CustomerService;
 use App\Services\Pppoe\OntWifiService;
@@ -36,7 +37,7 @@ class CustomerController extends Controller
     public function __construct(private readonly CustomerService $customers) {}
 
     /** Pelanggan Rumahan (tampilan S.NET): status online, ONT, pemakaian bulan terpilih & status bayar. */
-    public function index(Request $request): View
+    public function index(Request $request, CustomerLiveStatus $live): View
     {
         Gate::authorize('operate');
         $q = trim((string) $request->query('q'));
@@ -45,11 +46,9 @@ class CustomerController extends Controller
         $routerId = $request->integer('router_id');
         $status = (string) $request->query('status');
 
-        // Sesi PPPoE aktif dari radacct (tanpa harus menghubungi MikroTik satu per satu).
-        $sessions = DB::table('radacct')->whereNull('acctstoptime')->orderByDesc('radacctid')
-            ->get(['username', 'framedipaddress', 'acctstarttime'])->keyBy('username');
-        $onlineSince = now()->subSeconds((int) config('ontconfig.online_threshold_seconds'));
-        $ontOnline = OntDevice::where('last_inform_at', '>=', $onlineSince)->pluck('last_inform_at', 'serial_number');
+        // Sesi PPPoE aktif: radacct (RADIUS) + /ppp/active MikroTik (secret lokal tidak tercatat di radacct).
+        $sessions = collect($live->pppoeSessions())->merge(DB::table('radacct')->whereNull('acctstoptime')->orderByDesc('radacctid')
+            ->get(['username', 'framedipaddress', 'acctstarttime'])->keyBy('username'));
 
         $customers = PppoeCustomer::with('router:id,name')
             ->when($routerId > 0, fn ($b) => $b->where('router_id', $routerId))
@@ -59,6 +58,12 @@ class CustomerController extends Controller
             ->when($q !== '', fn ($b) => $b->where(fn ($w) => $w->where('full_name', 'like', "%{$q}%")
                 ->orWhere('pppoe_username', 'like', "%{$q}%")->orWhere('phone', 'like', "%{$q}%")->orWhere('ont_sn', 'like', "%{$q}%")))
             ->orderBy('full_name')->get();
+
+        // ONT online: inform terakhir langsung dari GenieACS (+ cache lokal), cocok untuk SN bentuk PON maupun hex.
+        $onlineSince = now()->subSeconds((int) config('ontconfig.online_threshold_seconds'));
+        $ontOnline = collect($live->ontLastInform($customers->pluck('ont_sn')->all()))
+            ->union(OntDevice::whereIn('serial_number', $customers->pluck('ont_sn')->filter())->pluck('last_inform_at', 'serial_number'))
+            ->filter(fn ($at) => $at && $onlineSince->lte($at));
 
         $ids = $customers->pluck('id');
         $payments = PppoePayment::whereIn('customer_id', $ids)->where('period_month', $month->month)->where('period_year', $month->year)

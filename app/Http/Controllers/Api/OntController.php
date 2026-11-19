@@ -27,6 +27,12 @@ class OntController extends Controller
         return response()->json($this->lookup()->search($request->validated('serial_number')));
     }
 
+    /** POST /api/ont/locate — SN ini terdaftar di server GenieACS mana (semua server aktif dicek). */
+    public function locate(SearchOntRequest $request): JsonResponse
+    {
+        return response()->json(['found' => OntLookupService::locate($request->validated('serial_number'))]);
+    }
+
     /** GET /api/ont/{device} */
     public function show(OntDevice $device): JsonResponse
     {

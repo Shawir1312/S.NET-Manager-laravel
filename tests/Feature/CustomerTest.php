@@ -106,6 +106,32 @@ class CustomerTest extends TestCase
         ]]]);
     }
 
+    public function test_list_shows_online_from_mikrotik_and_huawei_ont_by_hex_serial(): void
+    {
+        // Sesi dari secret lokal MikroTik (tidak ada di radacct) dan ONT Huawei yang di ACS ber-SN hex.
+        $customer = PppoeCustomer::factory()->for($this->router)->create(['pppoe_username' => 'odegoa@snet', 'ont_sn' => 'HWTC79FC699D']);
+        $this->router->update(['status' => 'active']);
+        $this->mikrotik->active = ['odegoa@snet'];
+        Http::fake(['*/devices/*' => Http::response([['_id' => 'x', '_deviceId' => ['_SerialNumber' => '4857544379FC699D', '_OUI' => '00259E', '_ProductClass' => 'HG8245H5', '_Manufacturer' => 'Huawei'], '_lastInform' => now()->subMinute()->toIso8601String()]])]);
+
+        $this->actingAs($this->operator)->get('/customers')->assertOk()
+            ->assertSee('10.10.0.2')->assertSee('ONT Online')->assertDontSee('ONT Offline');
+        $this->assertSame('HWTC79FC699D', $customer->ont_sn);
+    }
+
+    public function test_locate_tells_which_genieacs_has_the_serial(): void
+    {
+        Http::fake(['*/devices/*' => Http::response([['_id' => 'x', '_deviceId' => ['_SerialNumber' => '4857544379FC699D', '_OUI' => '00259E', '_ProductClass' => 'HG8245H5', '_Manufacturer' => 'Huawei'], '_lastInform' => now()->toIso8601String()]])]);
+
+        $found = $this->actingAs($this->operator)->postJson('/api/ont/locate', ['serial_number' => 'hwtc79fc699d'])->assertOk()->json('found');
+        $this->assertCount(1, $found);
+        $this->assertTrue($found[0]['online']);
+        $this->assertSame('Huawei HG8245H5', $found[0]['product']);
+
+        Http::fake(['*/devices/*' => Http::response([])]);
+        $this->actingAs($this->operator)->postJson('/api/ont/locate', ['serial_number' => 'ZTEG00000000'])->assertOk()->assertJson(['found' => []]);
+    }
+
     public function test_conflicting_hotspot_is_reported_not_silently_dropped(): void
     {
         (new StatefulGenieAcs($this->fiberhomeDoc()))->fake();

@@ -19,6 +19,7 @@ Route::middleware(['auth:sanctum', 'active', 'throttle:api', 'genie.server'])->g
 
     Route::prefix('ont')->name('api.ont.')->group(function () {
         Route::post('/search', [OntController::class, 'search'])->middleware('throttle:genieacs')->name('search');
+        Route::post('/locate', [OntController::class, 'locate'])->middleware('throttle:genieacs')->name('locate');
         Route::post('/sync', [OntController::class, 'sync'])->middleware('throttle:6,1')->name('sync');
 
         Route::get('/{device}', [OntController::class, 'show'])->whereNumber('device')->name('show');

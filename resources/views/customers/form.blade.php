@@ -44,6 +44,7 @@
                 <div class="col-md-4"><label class="form-label">SN ONT</label>
                     <div class="input-group"><input class="form-control font-monospace text-uppercase" name="ont_sn" id="ontSn" value="{{ old('ont_sn', $customer->ont_sn) }}" placeholder="FHTT… / ZTEG… / HWTC…">
                     <button class="btn btn-outline-dark" type="button" id="btnScanSn" title="Scan QR / barcode SN" aria-label="Scan SN pakai kamera"><i class="bi bi-qr-code-scan"></i></button></div>
+                    <div id="snCheck" class="small mt-1" aria-live="polite"></div>
                     <div id="snScanBox" class="mt-2" style="display:none;"><div id="snReader" class="rounded overflow-hidden border"></div>
                         <button class="btn btn-sm btn-outline-danger w-100 mt-1" type="button" id="btnStopSn">Tutup Kamera</button></div></div>
                 <div class="col-md-2"><label class="form-label">VLAN PPPoE</label><input class="form-control" type="number" min="1" max="4094" name="ont_vlan" id="ontVlan" value="{{ old('ont_vlan', $customer->ont_vlan ?: null) }}" placeholder="ikut template"></div>
@@ -79,7 +80,24 @@
 <script>
 (function () {
     const $ = (id) => document.getElementById(id);
-    $('btnScanSn').addEventListener('click', () => SnScan.start($('snScanBox'), 'snReader', (decoded, c) => { $('ontSn').value = c[0] || decoded.trim(); }));
+    // Cek langsung: SN ini terdaftar di server GenieACS mana & online atau tidak.
+    let snTimer = null, snSeq = 0;
+    async function checkSn() {
+        const sn = $('ontSn').value.trim().toUpperCase(), box = $('snCheck'), seq = ++snSeq;
+        if (sn.length < 6) { box.innerHTML = ''; return; }
+        box.innerHTML = '<span class="text-body-secondary"><span class="spinner-border spinner-border-sm me-1"></span>Mengecek SN di GenieACS…</span>';
+        try {
+            const r = await OntApp.api(@json(route('api.ont.locate')), { method: 'POST', body: { serial_number: sn } });
+            if (seq !== snSeq) return;
+            box.innerHTML = r.found.length === 0
+                ? '<span class="text-danger"><i class="bi bi-x-circle me-1"></i>SN tidak ditemukan di GenieACS mana pun. Cek SN atau pastikan ONT sudah terhubung ke ACS.</span>'
+                : r.found.map(d => `<div class="${d.online ? 'text-success' : 'text-warning'}"><i class="bi ${d.online ? 'bi-check-circle' : 'bi-exclamation-circle'} me-1"></i>`
+                    + `Ada di <strong>${escHtml(d.server)}</strong> · ${escHtml(d.product)} · ${d.online ? 'Online' : 'Offline (inform terakhir ' + (d.last_inform ? new Date(d.last_inform).toLocaleString('id-ID') : '-') + ')'}</div>`).join('');
+        } catch (e) { if (seq === snSeq) box.innerHTML = '<span class="text-danger">' + escHtml(e.message) + '</span>'; }
+    }
+    $('ontSn').addEventListener('input', () => { clearTimeout(snTimer); snTimer = setTimeout(checkSn, 700); });
+    if ($('ontSn').value) checkSn();
+    $('btnScanSn').addEventListener('click', () => SnScan.start($('snScanBox'), 'snReader', (decoded, c) => { $('ontSn').value = c[0] || decoded.trim(); checkSn(); }));
     $('btnStopSn').addEventListener('click', () => SnScan.stop($('snScanBox')));
     const isEdit = @json($edit);
     const suffix = @json(app(\App\Services\Settings\SnetSettings::class)->get('pppoe', 'ont_username_suffix', '@snet'));

@@ -63,7 +63,9 @@ class FakeMikrotik extends MikrotikConnector
 
                         return [];
                     })(),
-                    '/ppp/active/print' => in_array($name, $f->active, true) ? [['.id' => $name, 'name' => $name]] : [],
+                    '/ppp/active/print' => $name === null
+                        ? array_map(fn ($n) => ['.id' => $n, 'name' => $n, 'address' => '10.10.0.2', 'uptime' => '1h5m'], $f->active)
+                        : (in_array($name, $f->active, true) ? [['.id' => $name, 'name' => $name]] : []),
                     '/ppp/active/remove' => (function () use ($f, $args) {
                         $f->active = array_values(array_diff($f->active, [$args['.id']]));
 

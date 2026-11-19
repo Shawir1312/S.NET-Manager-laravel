@@ -6,6 +6,7 @@ use App\Enums\ServiceType;
 use App\Jobs\StartQueuedProvisioning;
 use App\Models\ConfigurationJob;
 use App\Models\ConfigurationTemplate;
+use App\Models\GenieAcsSetting;
 use App\Models\OntDevice;
 use App\Models\PppoeCustomer;
 use App\Models\User;
@@ -26,7 +27,9 @@ class CustomerOntProvisioner
     /** Cari ONT pelanggan di GenieACS milik router-nya (SN persis) dan simpan ke cache ONT. */
     public function findDevice(PppoeCustomer $customer): OntDevice
     {
-        if ($setting = $customer->router?->genieAcsSetting) {
+        // Server: milik router bila diatur, kalau tidak server GenieACS tempat SN ini benar-benar terdaftar.
+        $serverId = $customer->router?->genie_acs_setting_id ?? (OntLookupService::locate($customer->ont_sn)[0]['server_id'] ?? null);
+        if ($serverId && ($setting = GenieAcsSetting::find($serverId))) {
             GenieACSService::use($setting);
         }
 

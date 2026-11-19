@@ -4,6 +4,7 @@ namespace App\Services\ONT;
 
 use App\Enums\DeviceReadiness;
 use App\Models\ConfigurationJob;
+use App\Models\GenieAcsSetting;
 use App\Models\OntDevice;
 use App\Repositories\OntDeviceRepository;
 use App\Services\Audit\AuditLogger;
@@ -48,6 +49,32 @@ class OntLookupService
         }
 
         return $this->result(DeviceReadiness::Found, 'Perangkat ditemukan. Memeriksa status online…', $rows);
+    }
+
+    /**
+     * Cari SN di SEMUA server GenieACS aktif: di server mana ONT ini terdaftar dan apakah online.
+     *
+     * @return list<array{server_id: int, server: string, serial_number: ?string, product: string, online: bool, last_inform: ?string}>
+     */
+    public static function locate(string $serialNumber): array
+    {
+        $since = now()->subSeconds((int) config('ontconfig.online_threshold_seconds'));
+        $out = [];
+        foreach (GenieAcsSetting::where('is_active', true)->orderBy('id')->get() as $setting) {
+            $trees = rescue(fn () => (new GenieACSService($setting))->findDeviceBySerialNumber($serialNumber), [], report: false);
+            foreach ($trees as $tree) {
+                $id = $tree->deviceId();
+                $out[] = [
+                    'server_id' => $setting->id, 'server' => $setting->name,
+                    'serial_number' => $id['serial_number'],
+                    'product' => trim(($id['manufacturer'] ?? '').' '.($id['product_class'] ?? '')),
+                    'online' => (bool) $tree->lastInform()?->gte($since),
+                    'last_inform' => $tree->lastInform()?->toIso8601String(),
+                ];
+            }
+        }
+
+        return $out;
     }
 
     /**
