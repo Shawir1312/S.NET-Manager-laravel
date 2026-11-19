@@ -73,7 +73,8 @@ class HotspotOntSetupTest extends TestCase
         $this->actingAs($admin)->post('/templates', $this->templateData(['wifi_security' => 'password', 'wifi_key' => 'rahasia123']));
         $tech = User::factory()->teknisi()->create();
 
-        $this->actingAs($tech)->get('/ont-hotspot')->assertOk()->assertSee('Scan QR / Barcode SN')->assertSee('Hotspot S.NET')
+        $this->actingAs($tech)->get('/lapangan/hotspot')->assertOk()->assertSee(json_encode(route('field.add')), false);
+        $this->actingAs($tech)->get('/ont-hotspot')->assertOk()->assertSee(json_encode(route('customers.add')), false)->assertSee('Scan QR / Barcode SN')->assertSee('Hotspot S.NET')
             ->assertHeader('Permissions-Policy', 'camera=(self), microphone=(), geolocation=()');
         $this->actingAs($tech)->get('/dashboard')->assertHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
         $this->actingAs($tech)->get('/dashboard')->assertOk()->assertSee('Tambah Pelanggan')->assertSee(route('customers.add'), false);

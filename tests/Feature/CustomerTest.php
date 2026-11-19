@@ -144,6 +144,7 @@ class CustomerTest extends TestCase
         $progress = session('job_progress');
         $pppoe = ConfigurationJob::orderBy('id')->firstOrFail();
         $this->assertSame(2, $progress['expect'], 'PPPoE + hotspot dari template');
+        $this->assertSame(route('customers.add'), $progress['doneUrl'], 'setelah selesai kembali ke Tambah Pelanggan');
         $this->assertSame(route('api.configuration.status', $pppoe->uuid), $progress['jobs'][0]['status_url']);
 
         // Pop-up menemukan job hotspot yang menyusul lewat endpoint job per ONT.

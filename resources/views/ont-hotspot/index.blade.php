@@ -102,6 +102,7 @@
     const URL_SEARCH = @json(route('api.ont.search'));
     const URL_ONLINE = @json(url('/api/ont/__ID__/check-online'));
     const URL_APPLY = @json(route('ont-hotspot.apply'));
+    const DONE_URL = @json(route(request()->routeIs('field.*') ? 'field.add' : 'customers.add'));
     const $ = id => document.getElementById(id);
     let device = null;
 
@@ -218,7 +219,8 @@
     }
 
     function pollStatus(job) {
-        JobProgress.open({ jobs: [{ status_url: job.status_url, history_url: job.history_url, label: 'Hotspot · ' + (device?.serial_number || '') }], onDone: states => {
+        // Setelah selesai, menutup pop-up kembali ke awal (Tambah Pelanggan) untuk ONT berikutnya.
+        JobProgress.open({ jobs: [{ status_url: job.status_url, history_url: job.history_url, label: 'Hotspot · ' + (device?.serial_number || '') }], doneUrl: DONE_URL, goOnClose: true, onDone: states => {
             const btn = $('btnApply');
             btn.disabled = false;
             btn.innerHTML = '<i class="bi bi-send-check me-1"></i> Terapkan ke ONT';

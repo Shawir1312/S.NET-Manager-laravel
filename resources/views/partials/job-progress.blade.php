@@ -7,8 +7,9 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
             </div>
             <div class="modal-body" id="jobProgressBody" aria-live="polite"></div>
-            <div class="modal-footer"><small class="text-body-secondary me-auto">Boleh ditutup — proses tetap berjalan di server.</small>
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Tutup</button></div>
+            <div class="modal-footer"><small class="text-body-secondary me-auto" id="jobProgressHint">Boleh ditutup — proses tetap berjalan di server.</small>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" id="jobProgressClose">Tutup</button>
+                <a class="btn btn-primary" id="jobProgressNext" style="display:none;"><i class="bi bi-plus-circle me-1"></i>Tambah Pelanggan Lain</a></div>
         </div>
     </div>
 </div>
@@ -38,12 +39,17 @@ window.JobProgress = (() => {
     }
 
     // opts.jobs: job yang sudah diketahui; opts.deviceJobsUrl: cari job baru di ONT ini (mis. hotspot yang diantrekan); opts.expect: jumlah job yang ditunggu.
+    // opts.doneUrl: tombol "Tambah Pelanggan Lain" setelah selesai; opts.goOnClose: menutup pop-up setelah selesai = kembali ke doneUrl.
     function open(opts) {
         const jobs = [...(opts.jobs || [])], states = {}, me = ++run, started = Date.now();
-        let lastFinal = null;
+        const modal = document.getElementById('jobProgressModal'), next = document.getElementById('jobProgressNext');
+        let lastFinal = null, done = false;
         clearTimeout(timer);
         document.getElementById('jobProgressSpin').style.display = '';
-        bootstrap.Modal.getOrCreateInstance(document.getElementById('jobProgressModal')).show();
+        document.getElementById('jobProgressHint').textContent = 'Boleh ditutup — proses tetap berjalan di server.';
+        next.style.display = 'none';
+        modal.addEventListener('hidden.bs.modal', () => { if (done && opts.goOnClose && opts.doneUrl && me === run) location.href = opts.doneUrl; }, { once: true });
+        bootstrap.Modal.getOrCreateInstance(modal).show();
         render(jobs, states, false);
 
         const tick = async () => {
@@ -63,6 +69,12 @@ window.JobProgress = (() => {
             render(jobs, states, allFinal && expectMore);
             if (allFinal && !expectMore) {
                 document.getElementById('jobProgressSpin').style.display = 'none';
+                done = true;
+                if (opts.doneUrl) {
+                    next.href = opts.doneUrl;
+                    next.style.display = '';
+                    document.getElementById('jobProgressHint').textContent = 'Setting selesai.';
+                }
                 opts.onDone?.(jobs.map(j => states[j.status_url]));
                 return;
             }

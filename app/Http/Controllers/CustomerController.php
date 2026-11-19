@@ -164,7 +164,7 @@ class CustomerController extends Controller
      *
      * @return array<string, mixed>|null
      */
-    private static function progressFor(?ConfigurationJob $job): ?array
+    private static function progressFor(?ConfigurationJob $job, ?string $doneRoute = null): ?array
     {
         if (! $job) {
             return null;
@@ -175,6 +175,8 @@ class CustomerController extends Controller
             'jobs' => [['label' => $job->service_type->label().' · '.$job->device?->serial_number, 'status_url' => route('api.configuration.status', $job->uuid), 'history_url' => route('history.show', $job->uuid)]],
             'deviceJobsUrl' => route('api.ont.jobs', ['device' => $job->ont_device_id, 'after_id' => $job->id]),
             'expect' => $template?->hotspotPart() ? 2 : 1,
+            // Dari Tambah Pelanggan: setelah selesai ada tombol kembali ke awal untuk pelanggan berikutnya.
+            'doneUrl' => $doneRoute ? route($doneRoute) : null,
         ];
     }
 
@@ -212,7 +214,7 @@ class CustomerController extends Controller
         // Dari aplikasi lapangan: kembali ke beranda lapangan, bukan halaman admin. Progres setting ONT tampil sebagai pop-up.
         return ($request->boolean('from_field') ? redirect()->route('field.home') : redirect()->route('customers.show', $r['customer']))
             ->with('status', implode(' ', $r['notes']))
-            ->with('job_progress', self::progressFor($r['job']));
+            ->with('job_progress', self::progressFor($r['job'], $request->boolean('from_field') ? 'field.add' : 'customers.add'));
     }
 
     public function show(PppoeCustomer $customer): View
