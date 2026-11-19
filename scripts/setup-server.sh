@@ -331,7 +331,7 @@ After=network.target mariadb.service mysql.service
 User=$WEB_USER
 Group=$WEB_USER
 WorkingDirectory=$APP_DIR
-ExecStart=${PHP_CLI[*]} $APP_DIR/artisan queue:work --sleep=3 --tries=1 --max-time=3600
+ExecStart=${PHP_CLI[*]} $APP_DIR/artisan queue:work --queue=provisioning,default --sleep=3 --tries=1 --timeout=960 --max-time=3600
 Restart=always
 RestartSec=5
 [Install]
@@ -436,6 +436,7 @@ step_post_update() {
         step_cli
         [ -f /usr/local/sbin/snet-setup ] && install -o root -g root -m 755 "$APP_DIR/scripts/setup-server.sh" /usr/local/sbin/snet-setup && ok "Skrip snet-setup diperbarui."
     fi
+    if changed scripts/setup-server.sh && [ -f /etc/systemd/system/snet-queue.service ]; then step_queue; fi
     systemctl is-enabled --quiet snet-queue 2>/dev/null && systemctl restart snet-queue && ok "Queue worker direstart."
     echo
     [ -n "$old" ] && { info "Perubahan yang masuk:"; git -C "$APP_DIR" log --oneline "$old"..HEAD | sed 's/^/    /'; }

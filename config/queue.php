@@ -40,7 +40,9 @@ return [
             'connection' => env('DB_QUEUE_CONNECTION'),
             'table' => env('DB_QUEUE_TABLE', 'jobs'),
             'queue' => env('DB_QUEUE', 'default'),
-            'retry_after' => (int) env('DB_QUEUE_RETRY_AFTER', 90),
+            // Harus lebih lama dari timeout job provisioning (900 dtk), kalau tidak job yang masih berjalan
+            // dianggap macet lalu dijalankan ulang (bisa membuat WAN dobel di ONT).
+            'retry_after' => (int) env('DB_QUEUE_RETRY_AFTER', 1000),
             'after_commit' => false,
         ],
 
