@@ -11,14 +11,14 @@
             ['Daftar MAC', 'bi-laptop', 'monitoring.mac', 'operate'],
         ],
         ($user->isAdmin() ? 'Broadband (PPPoE)' : 'Pelanggan') => [
-            ['Pelanggan Rumahan', 'bi-house-door', 'customers.index', 'operate', [], 'customers.*'],
+            ['Tambah Pelanggan (Scan SN)', 'bi-qr-code-scan', 'customers.add', 'operate', [], 'customers.add|customers.create|ont-hotspot.*'],
+            ['Pelanggan Rumahan', 'bi-house-door', 'customers.index', 'operate', [], 'customers.index|customers.show|customers.edit'],
             ['Paket PPPoE', 'bi-box', 'pppoe-profiles.index', 'manage-settings', [], 'pppoe-profiles.*'],
             ['Riwayat Pembayaran', 'bi-wallet2', 'payments.index', 'operate'],
             ['Pengaturan PPPoE', 'bi-gear-wide-connected', 'pppoe-settings.edit', 'manage-settings'],
         ],
         // Bagian ONT & ACS memakai mesin ont-autoconfig (wizard, template, verifikasi, rollback).
         'ONT & ACS' => [
-            ['Setting ONT Hotspot (Scan SN)', 'bi-qr-code-scan', 'ont-hotspot.index', 'configure-ont'],
             // Viewer (tanpa hak operate) tetap bisa melihat daftar ONT (read-only).
             $user->can('operate')
                 ? ['Monitor ONT', 'bi-hdd-network', 'ont-monitor.index', 'operate', [], 'ont-monitor.*|devices.*']

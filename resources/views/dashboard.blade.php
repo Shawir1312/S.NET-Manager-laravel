@@ -10,7 +10,7 @@
     </div>
     @can('operate')
         <div class="d-flex gap-2 align-items-center flex-wrap">
-            @can('configure-ont')<a href="{{ route('ont-hotspot.index') }}" class="btn btn-success"><i class="bi bi-qr-code-scan me-1"></i> Setting ONT Hotspot</a>@endcan
+            <a href="{{ route('customers.add') }}" class="btn btn-success"><i class="bi bi-qr-code-scan me-1"></i> Tambah Pelanggan</a>
             <a href="{{ route('vouchers.create') }}" class="btn btn-primary"><i class="bi bi-plus-circle me-1"></i> Generate Voucher</a>
         </div>
     @endcan
@@ -18,13 +18,13 @@
 @endsection
 
 @section('content')
-@can('configure-ont')
-<a href="{{ route('ont-hotspot.index') }}" class="card border-0 shadow-sm mb-4 text-decoration-none" style="background: linear-gradient(135deg, #2e7d32, #43a047);">
+@can('operate')
+<a href="{{ route('customers.add') }}" class="card border-0 shadow-sm mb-4 text-decoration-none" style="background: linear-gradient(135deg, #2e7d32, #43a047);">
     <div class="card-body p-3 d-flex align-items-center gap-3 text-white">
         <div class="rounded-circle bg-white bg-opacity-25 d-flex align-items-center justify-content-center flex-shrink-0" style="width:52px;height:52px;"><i class="bi bi-qr-code-scan fs-3"></i></div>
         <div class="flex-fill">
-            <div class="fw-bold fs-6">Setting ONT Hotspot</div>
-            <div class="small opacity-75">Scan QR/barcode SN atau ketik manual → cek online → isi nama → otomatis ikut template hotspot</div>
+            <div class="fw-bold fs-6">Tambah Pelanggan</div>
+            <div class="small opacity-75">Scan QR/barcode SN atau ketik manual → cek di GenieACS → pilih Rumahan (PPPoE) atau Hotspot saja</div>
         </div>
         <i class="bi bi-chevron-right fs-4"></i>
     </div>

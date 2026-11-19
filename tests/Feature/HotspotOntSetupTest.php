@@ -76,7 +76,7 @@ class HotspotOntSetupTest extends TestCase
         $this->actingAs($tech)->get('/ont-hotspot')->assertOk()->assertSee('Scan QR / Barcode SN')->assertSee('Hotspot S.NET')
             ->assertHeader('Permissions-Policy', 'camera=(self), microphone=(), geolocation=()');
         $this->actingAs($tech)->get('/dashboard')->assertHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
-        $this->actingAs($tech)->get('/dashboard')->assertOk()->assertSee('Setting ONT Hotspot');
+        $this->actingAs($tech)->get('/dashboard')->assertOk()->assertSee('Tambah Pelanggan')->assertSee(route('customers.add'), false);
 
         $res = $this->actingAs($tech)->postJson('/ont-hotspot/apply', ['device_id' => $device->id, 'name' => 'Warung Ani'])
             ->assertStatus(202)->assertJsonPath('is_simulation', true)->assertJsonPath('warnings', []);

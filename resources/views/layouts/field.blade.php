@@ -60,12 +60,9 @@
 
 <nav class="field-nav">
     <a href="{{ route('field.home') }}" @class(['active' => request()->routeIs('field.home')])><i class="bi bi-house"></i>Beranda</a>
-    @can('configure-ont')
-        <a href="{{ route('field.hotspot') }}" @class(['active' => request()->routeIs('field.hotspot')])><i class="bi bi-qr-code-scan"></i>ONT Hotspot</a>
-    @endcan
-    @can('operate')
-        <a href="{{ route('field.customers.create') }}" @class(['active' => request()->routeIs('field.customers.*')])><i class="bi bi-person-plus"></i>Pelanggan</a>
-    @endcan
+    @canany(['operate', 'configure-ont'])
+        <a href="{{ route('field.add') }}" @class(['active' => request()->routeIs('field.add', 'field.hotspot', 'field.customers.*')])><i class="bi bi-qr-code-scan"></i>Tambah Pelanggan</a>
+    @endcanany
 </nav>
 
 <div id="app-progress-bar" class="app-progress-bar"></div>

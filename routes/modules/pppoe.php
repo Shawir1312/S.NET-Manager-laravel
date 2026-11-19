@@ -9,6 +9,8 @@ use App\Http\Controllers\WhatsAppController;
 use Illuminate\Support\Facades\Route;
 
 Route::post('/customers/sync-mikrotik', [CustomerController::class, 'syncFromMikrotik'])->middleware('throttle:6,1')->name('customers.sync');
+// Satu pintu tambah pelanggan: scan/isi SN lalu pilih Rumahan (PPPoE) atau Hotspot saja.
+Route::get('/tambah-pelanggan', [CustomerController::class, 'add'])->name('customers.add');
 Route::resource('customers', CustomerController::class);
 Route::post('/customers/{customer}/wifi', [CustomerController::class, 'quickWifi'])->middleware('throttle:10,1')->name('customers.wifi');
 Route::post('/customers/{customer}/portal', [CustomerController::class, 'quickPortal'])->name('customers.portal');

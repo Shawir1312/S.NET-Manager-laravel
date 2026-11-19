@@ -1,28 +1,14 @@
 @extends('layouts.field')
 @section('title', 'Beranda')
 @section('content')
-<div class="row g-3 mb-4">
-    @can('configure-ont')
-    <div class="col-12 col-md-6">
-        <a href="{{ route('field.hotspot') }}" class="card shadow-sm text-decoration-none h-100">
-            <div class="card-body d-flex align-items-center gap-3 py-4">
-                <i class="bi bi-qr-code-scan text-primary" style="font-size: 2.5rem;"></i>
-                <div><div class="fw-bold fs-5 text-body">Setting ONT Hotspot</div><small class="text-body-secondary">Scan SN → isi nama → template hotspot</small></div>
-            </div>
-        </a>
+@canany(['operate', 'configure-ont'])
+<a href="{{ route('field.add') }}" class="card shadow-sm text-decoration-none mb-4">
+    <div class="card-body d-flex align-items-center gap-3 py-4">
+        <i class="bi bi-qr-code-scan text-primary" style="font-size: 2.5rem;"></i>
+        <div><div class="fw-bold fs-5 text-body">Tambah Pelanggan</div><small class="text-body-secondary">Scan / isi SN → pilih Rumahan (PPPoE) atau Hotspot saja</small></div>
     </div>
-    @endcan
-    @can('operate')
-    <div class="col-12 col-md-6">
-        <a href="{{ route('field.customers.create') }}" class="card shadow-sm text-decoration-none h-100">
-            <div class="card-body d-flex align-items-center gap-3 py-4">
-                <i class="bi bi-house-add text-success" style="font-size: 2.5rem;"></i>
-                <div><div class="fw-bold fs-5 text-body">Tambah Pelanggan Rumahan</div><small class="text-body-secondary">PPPoE + konfigurasi ONT otomatis</small></div>
-            </div>
-        </a>
-    </div>
-    @endcan
-</div>
+</a>
+@endcanany
 
 <div class="card shadow-sm">
     <div class="card-header fw-semibold"><i class="bi bi-clock-history me-1"></i> Setting ONT terakhir saya</div>

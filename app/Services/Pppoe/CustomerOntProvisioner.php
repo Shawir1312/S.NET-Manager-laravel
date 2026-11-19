@@ -10,7 +10,9 @@ use App\Models\GenieAcsSetting;
 use App\Models\OntDevice;
 use App\Models\PppoeCustomer;
 use App\Models\User;
+use App\Services\GenieACS\Exceptions\GenieACSException;
 use App\Services\GenieACS\GenieACSService;
+use App\Services\ONT\HotspotOntSetup;
 use App\Services\ONT\OntLookupService;
 use App\Services\Provisioning\ProvisioningException;
 use App\Services\Provisioning\ProvisioningService;
@@ -117,13 +119,14 @@ class CustomerOntProvisioner
     {
         $device = $this->findDevice($customer);
         $pppoeTemplate = $this->templateFor($customer, ServiceType::Pppoe, $pppoeTemplateId);
+        $tagWarning = $this->tagWithName($device, $customer);
         // PPPoE + Hotspot dalam satu template: port/SSID keduanya sudah dicek tidak bentrok saat template disimpan.
         $hotspotTemplate = $pppoeTemplate->hotspotPart();
 
         // Port/SSID template yang tidak ada di ONT ini dilewati; yang ada tetap diterapkan.
         [$pppoeInput, $skipped] = $this->provisioning->fitInterfaces($device, $this->buildInput($customer, $pppoeTemplate, $pppoePassword));
         $job = $this->provisioning->start($device, $pppoeInput, $user, $pppoeTemplate->id);
-        $warnings = $skipped === [] ? [] : ['PPPoE — dilewati karena tidak ada di ONT ini: '.implode(', ', $skipped).'.'];
+        $warnings = array_values(array_filter([$tagWarning, $skipped === [] ? null : 'PPPoE — dilewati karena tidak ada di ONT ini: '.implode(', ', $skipped).'.']));
 
         if ($hotspotTemplate) {
             [$input, $skipped] = $this->provisioning->fitInterfaces($device, $this->buildInput($customer, $hotspotTemplate, null));
@@ -140,5 +143,17 @@ class CustomerOntProvisioner
         }
 
         return ['job' => $job, 'warnings' => $warnings];
+    }
+
+    /** Nama pelanggan jadi tag/komentar ONT di GenieACS (tag lama diganti), sama seperti setting ONT hotspot. */
+    public function tagWithName(OntDevice $device, PppoeCustomer $customer): ?string
+    {
+        try {
+            app(HotspotOntSetup::class)->tagDevice($device, $customer->full_name);
+
+            return null;
+        } catch (GenieACSException $e) {
+            return 'Nama belum tersimpan sebagai tag di GenieACS: '.$e->getMessage();
+        }
     }
 }

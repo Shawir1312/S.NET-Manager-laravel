@@ -23,6 +23,7 @@ use App\Services\Radius\RadiusSync;
 use App\Services\Settings\SnetSettings;
 use App\Services\WhatsApp\DefaultTemplates;
 use App\Services\WhatsApp\WhatsAppGateway;
+use App\Support\SerialNumber;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -158,13 +159,22 @@ class CustomerController extends Controller
         return back()->with('status', "Akun portal {$customer->full_name} disimpan.{$note}");
     }
 
+    /** Langkah awal tambah pelanggan: SN dulu, lalu pilih jenis (rumahan / hotspot). */
+    public function add(): View
+    {
+        abort_unless(Gate::any(['operate', 'configure-ont']), 403);
+
+        return view('customers.add');
+    }
+
     public function create(Request $request): View
     {
         Gate::authorize('operate');
         $router = Router::find($request->integer('router_id')) ?? Router::orderBy('name')->first();
 
         return view('customers.form', [
-            'customer' => new PppoeCustomer(['router_id' => $router?->id, 'due_day' => 1, 'status' => 'active', 'ont_vlan' => null]),
+            'customer' => new PppoeCustomer(['router_id' => $router?->id, 'due_day' => 1, 'status' => 'active', 'ont_vlan' => null,
+                'ont_sn' => SerialNumber::normalize((string) $request->query('sn'))]),
             'suggestedPassword' => CustomerService::randomPassword(),
         ] + $this->formOptions($router));
     }
@@ -270,6 +280,7 @@ class CustomerController extends Controller
             if ($d['service'] === 'bridge') {
                 $device = $ont->findDevice($customer);
                 $template = $ont->templateFor($customer, ServiceType::Bridge, $d['hotspot_template_id'] ?? null);
+                $warnings = array_filter([$ont->tagWithName($device, $customer)]);
                 $provisioning->start($device, $ont->buildInput($customer, $template, null), $request->user(), $template->id);
             } else {
                 $warnings = $ont->push($customer, $request->user(), $radius->passwordOf($customer->pppoe_username), $d['pppoe_template_id'] ?? null)['warnings'];

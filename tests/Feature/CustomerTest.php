@@ -123,6 +123,30 @@ class CustomerTest extends TestCase
         $this->assertSame('HWTC79FC699D', $customer->ont_sn);
     }
 
+    public function test_single_add_page_passes_sn_to_rumahan_or_hotspot(): void
+    {
+        foreach (['/tambah-pelanggan', '/lapangan/tambah'] as $url) {
+            $this->actingAs($this->operator)->get($url)->assertOk()
+                ->assertSee('Pelanggan Rumahan (PPPoE)')->assertSee('Hotspot saja')
+                ->assertHeader('Permissions-Policy', 'camera=(self), microphone=(), geolocation=()');
+        }
+        // Langkah berikutnya menerima SN dari halaman pilih jenis.
+        $this->actingAs($this->operator)->get('/customers/create?sn=hwtc79fc699d')->assertOk()->assertSee('value="HWTC79FC699D"', false);
+        $this->actingAs($this->operator)->get('/lapangan/pelanggan/baru?sn=HWTC79FC699D')->assertOk()->assertSee('value="HWTC79FC699D"', false);
+    }
+
+    public function test_push_tags_ont_with_customer_name_replacing_old_tags(): void
+    {
+        $doc = $this->fiberhomeDoc();
+        $doc['_tags'] = ['Pemilik Lama'];
+        $acs = (new StatefulGenieAcs($doc))->fake();
+        $this->pppoeWithHotspot(300);
+
+        $this->actingAs($this->operator)->post('/customers', $this->form(['push_ont' => 1]))->assertSessionHasNoErrors();
+
+        $this->assertSame(['Budi Santoso'], $acs->doc['_tags'], 'nama pelanggan jadi tag/komentar ONT; tag lama diganti');
+    }
+
     public function test_locate_tells_which_genieacs_has_the_serial(): void
     {
         Http::fake(['*/devices/*' => Http::response([['_id' => 'x', '_deviceId' => ['_SerialNumber' => '4857544379FC699D', '_OUI' => '00259E', '_ProductClass' => 'HG8245H5', '_Manufacturer' => 'Huawei'], '_lastInform' => now()->toIso8601String()]])]);
