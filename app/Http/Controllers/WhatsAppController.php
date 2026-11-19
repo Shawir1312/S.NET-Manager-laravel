@@ -80,6 +80,8 @@ class WhatsAppController extends Controller
         if (blank($d['api_token'] ?? null)) {
             unset($d['api_token']);
         }
+        // Kolom device_id NOT NULL; form mengirim kosong (jadi null) untuk provider tanpa Device ID.
+        $d['device_id'] = (string) ($d['device_id'] ?? '');
         $cfg = WaConfig::first() ?? new WaConfig;
         $cfg->fill($d + ['is_active' => $request->boolean('is_active')])->save();
 

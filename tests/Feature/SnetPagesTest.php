@@ -7,6 +7,7 @@ use App\Models\OntDevice;
 use App\Models\PppoeCustomer;
 use App\Models\Router;
 use App\Models\User;
+use App\Models\WaConfig;
 use App\Models\WgRouter;
 use App\Services\Mikrotik\MikrotikConnector;
 use App\Services\WireGuard\WireGuardService;
@@ -62,6 +63,19 @@ class SnetPagesTest extends TestCase
         foreach (['/routers', '/wireguard', '/pppoe-settings', '/whatsapp', '/settings/backup'] as $p) {
             $this->actingAs($op)->get($p)->assertForbidden();
         }
+    }
+
+    public function test_whatsapp_config_saves_with_empty_device_id_and_keeps_token(): void
+    {
+        $admin = User::factory()->admin()->create();
+        // WA Web / Fonnte: kolom Device ID tersembunyi dan terkirim kosong.
+        $this->actingAs($admin)->put('/whatsapp/config', ['provider' => 'fonnte', 'api_url' => 'https://api.fonnte.com/send', 'api_token' => 'tok-123', 'device_id' => '', 'is_active' => 1])
+            ->assertRedirect(route('whatsapp.index', ['tab' => 'config']));
+        $this->actingAs($admin)->put('/whatsapp/config', ['provider' => 'waweb', 'api_url' => 'http://127.0.0.1:3000/api/send', 'api_token' => '', 'device_id' => ''])
+            ->assertRedirect();
+
+        $cfg = WaConfig::firstOrFail();
+        $this->assertSame(['waweb', '', 'tok-123', false], [$cfg->provider, $cfg->device_id, $cfg->api_token, $cfg->is_active]);
     }
 
     public function test_wireguard_keys_match_rfc7748_vector(): void
