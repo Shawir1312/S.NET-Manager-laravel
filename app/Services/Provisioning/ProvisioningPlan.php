@@ -35,6 +35,12 @@ final class ProvisioningPlan
         $this->steps[] = ['type' => 'add_object', 'object' => $object, 'assign' => $assign, 'description' => $description];
     }
 
+    /** Pastikan instance nomor tertentu ada; bila belum, AddObject sampai nomor itu terbentuk (mis. SSID 2-8). */
+    public function ensureInstance(string $object, int $index, string $description): void
+    {
+        $this->steps[] = ['type' => 'ensure_instance', 'object' => $object, 'index' => $index, 'description' => $description];
+    }
+
     /**
      * @param  list<array{path: string, value: mixed, type: string, key: string, secret?: bool}>  $values
      */
@@ -89,7 +95,7 @@ final class ProvisioningPlan
 
     public function createsObjects(): bool
     {
-        return collect($this->steps)->contains('type', 'add_object');
+        return collect($this->steps)->contains(fn ($s) => in_array($s['type'], ['add_object', 'ensure_instance'], true));
     }
 
     /** @return array<string, mixed> */

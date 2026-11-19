@@ -268,4 +268,51 @@ class ProvisioningTest extends TestCase
             ->assertJsonPath('capabilities.pppoe_slot', 'ppp')
             ->assertJsonPath('capabilities.binding_method', 'string_list');
     }
+
+    public function test_production_creates_missing_ssid_with_add_object(): void
+    {
+        $this->enableProduction();
+        // Seperti ONT FiberHome bawaan pabrik: hanya SSID 1 & 5, SSID lain harus ditambah dulu.
+        $doc = $this->fiberhomeDoc();
+        foreach ([2, 3, 4, 6, 7, 8] as $n) {
+            unset($doc['InternetGatewayDevice']['LANDevice']['1']['WLANConfiguration'][$n]);
+        }
+        $sim = (new StatefulGenieAcs($doc))->fake();
+        $sim->addObjectNumbering = 'lowest'; // seperti saat SSID ditambah di web ONT
+
+        $input = $this->input(['ssids' => [['index' => 2, 'ssid_name' => 'S.NET HOTSPOT', 'security' => 'None', 'password' => null, 'enabled' => true]], 'binding' => ['lan' => [1], 'wlan' => [2]]]);
+        $preview = $this->actingAs($this->tech)->postJson("/api/ont/{$this->device->id}/preview", $input)->assertOk()->json();
+        $this->assertSame([], $preview['errors']);
+        $this->assertContains('ensure_instance', array_column($preview['steps'], 'type'));
+
+        $id = $this->actingAs($this->tech)->postJson('/api/ont/configure', $input)->assertStatus(202)->json('id');
+        $status = $this->actingAs($this->tech)->getJson("/api/configuration/{$id}/status")->json();
+        $this->assertSame('success', $status['status'], json_encode($status['timeline']));
+
+        $wlan = $sim->doc['InternetGatewayDevice']['LANDevice']['1']['WLANConfiguration'];
+        $this->assertArrayHasKey('2', $wlan, 'SSID 2 dibuat lewat AddObject');
+        $this->assertSame('S.NET HOTSPOT', $wlan['2']['SSID']['_value'][0]);
+
+        // Rollback menghapus SSID yang dibuat.
+        $this->actingAs($this->tech)->postJson("/api/configuration/{$id}/rollback")->assertOk();
+        $this->assertArrayNotHasKey('2', $sim->doc['InternetGatewayDevice']['LANDevice']['1']['WLANConfiguration']);
+    }
+
+    public function test_production_aborts_cleanly_when_ont_numbers_new_ssid_differently(): void
+    {
+        $this->enableProduction();
+        $doc = $this->fiberhomeDoc();
+        foreach ([2, 3, 4, 6, 7, 8] as $n) {
+            unset($doc['InternetGatewayDevice']['LANDevice']['1']['WLANConfiguration'][$n]);
+        }
+        $sim = (new StatefulGenieAcs($doc))->fake(); // ONT memberi nomor terbesar+1 (6)
+
+        $input = $this->input(['ssids' => [['index' => 2, 'ssid_name' => 'S.NET HOTSPOT', 'security' => 'None', 'password' => null, 'enabled' => true]], 'binding' => ['lan' => [1], 'wlan' => [2]]]);
+        $id = $this->actingAs($this->tech)->postJson('/api/ont/configure', $input)->assertStatus(202)->json('id');
+        $status = $this->actingAs($this->tech)->getJson("/api/configuration/{$id}/status")->json();
+
+        $this->assertSame('failed', $status['status']);
+        $this->assertStringContainsString('ONT membuat SSID 6', $status['error_message']);
+        $this->assertSame(['1', '5'], array_map('strval', array_values(array_filter(array_keys($sim->doc['InternetGatewayDevice']['LANDevice']['1']['WLANConfiguration']), 'is_numeric'))), 'SSID salah nomor dihapus lagi');
+    }
 }

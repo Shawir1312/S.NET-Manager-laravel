@@ -116,10 +116,11 @@ class HotspotOntSetupTest extends TestCase
         $res = $this->actingAs(User::factory()->teknisi()->create())->postJson('/ont-hotspot/apply', ['device_id' => $device->id, 'name' => 'Warung Ani']);
         $res->assertStatus(202);
 
-        $this->assertSame(['Dilewati karena tidak ada di ONT ini: LAN 3, LAN 4, SSID 2, SSID 6.'], $res->json('warnings'));
+        // Port LAN tidak bisa dibuat → dilewati; SSID 2/6 yang belum ada dibuat (AddObject), bukan dilewati.
+        $this->assertSame(['Dilewati karena tidak ada di ONT ini: LAN 3, LAN 4.'], $res->json('warnings'));
         $job = ConfigurationJob::where('uuid', $res->json('id'))->firstOrFail();
         $this->assertNotSame('failed', $job->fresh()->status->value, (string) $job->fresh()->error_message);
         $payload = json_encode($job->plan);
-        $this->assertStringNotContainsString('WLANConfiguration.6', $payload);
+        $this->assertStringContainsString('ensure_instance', $payload);
     }
 }

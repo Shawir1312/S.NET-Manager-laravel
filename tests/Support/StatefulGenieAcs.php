@@ -18,6 +18,9 @@ class StatefulGenieAcs
 
     public bool $online = true;
 
+    /** Penomoran instance AddObject oleh ONT: 'max' = terbesar+1, 'lowest' = nomor kosong terkecil. */
+    public string $addObjectNumbering = 'max';
+
     /** Nama task yang dibuat fault (mis. 'setParameterValues'). */
     public ?string $faultOn = null;
 
@@ -111,6 +114,9 @@ class StatefulGenieAcs
                 $node = &$this->node($task['objectName']);
                 $ids = array_filter(array_keys($node), 'is_numeric');
                 $next = $ids ? max($ids) + 1 : 1;
+                if ($this->addObjectNumbering === 'lowest') {
+                    for ($next = 1; in_array((string) $next, array_map('strval', $ids), true); $next++);
+                }
                 $last = substr($task['objectName'], strrpos($task['objectName'], '.') + 1);
                 $node[(string) $next] = ['_object' => true, '_writable' => true] + ($this->newObjectParams[$last] ?? []);
                 break;

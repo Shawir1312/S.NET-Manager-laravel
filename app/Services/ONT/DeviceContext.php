@@ -21,6 +21,20 @@ final class DeviceContext
         private readonly Collection $mappings,
     ) {}
 
+    /** @var array<string, list<int>> instance yang akan dibuat (AddObject) oleh rencana, per objek induk */
+    private array $planned = [];
+
+    /** Tandai instance yang akan dibuat rencana (mis. SSID yang default belum ada di ONT). */
+    public function planInstance(string $object, int $index): void
+    {
+        $this->planned[$object][] = $index;
+    }
+
+    public function isPlanned(string $object, int $index): bool
+    {
+        return in_array($index, $this->planned[$object] ?? [], true);
+    }
+
     public static function build(OntDevice $device, ParameterTree $tree, DetectionResult $detection): self
     {
         $mappings = $detection->model

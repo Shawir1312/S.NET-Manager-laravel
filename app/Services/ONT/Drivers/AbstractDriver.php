@@ -85,6 +85,7 @@ abstract class AbstractDriver implements ONTInterface
             ? $this->createWANBridge($ctx, $req, $wan, $plan)
             : $this->createWANPPPoE($ctx, $req, $wan, $plan));
         $this->attempt($plan, fn () => $this->configureVLAN($ctx, $req, $wan, $plan));
+        $this->planMissingSsids($ctx, $req, $plan);
         $this->attempt($plan, fn () => $this->configureBinding($ctx, $req, $wan, $plan));
         $this->attempt($plan, fn () => $this->configureSSID($ctx, $req, $plan));
 
@@ -155,6 +156,27 @@ abstract class AbstractDriver implements ONTInterface
         }
 
         $plan->setValues($values, "Konfigurasi VLAN {$req->wan['vlan_id']}");
+    }
+
+    /**
+     * Banyak ONT (mis. FiberHome) hanya punya SSID 1 (dan 5) secara default; SSID 2-8 harus ditambah dulu.
+     * SSID yang diminta tapi belum ada direncanakan untuk dibuat (AddObject) sebelum diatur & di-bind.
+     */
+    protected function planMissingSsids(DeviceContext $ctx, ConfigurationRequest $req, ProvisioningPlan $plan): void
+    {
+        $object = $ctx->root().'.LANDevice.1.WLANConfiguration';
+        $existing = $ctx->tree->instances($object);
+        if ($existing === []) {
+            return; // ONT tanpa WLAN (atau data WLAN belum terbaca) — biarkan validasi biasa yang melapor.
+        }
+        $wanted = array_unique([...$req->binding['wlan'], ...array_column($req->ssids, 'index')]);
+        sort($wanted);
+        foreach ($wanted as $n) {
+            if ($n >= 1 && $n <= 8 && ! in_array($n, $existing, true)) {
+                $plan->ensureInstance($object, $n, "Menambah SSID {$n} di ONT (AddObject, default belum ada)");
+                $ctx->planInstance($object, $n);
+            }
+        }
     }
 
     public function configureBinding(DeviceContext $ctx, ConfigurationRequest $req, WanTarget $wan, ProvisioningPlan $plan): void

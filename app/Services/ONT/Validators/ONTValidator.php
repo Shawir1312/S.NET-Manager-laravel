@@ -40,8 +40,8 @@ final class ONTValidator
 
     public static function interfaceExists(DeviceContext $ctx, string $type, int $n): bool
     {
-        $object = $type === 'lan' ? 'LANEthernetInterfaceConfig' : 'WLANConfiguration';
+        $object = $ctx->root().'.LANDevice.1.'.($type === 'lan' ? 'LANEthernetInterfaceConfig' : 'WLANConfiguration');
 
-        return in_array($n, $ctx->tree->instances($ctx->root().".LANDevice.1.{$object}"), true);
+        return in_array($n, $ctx->tree->instances($object), true) || $ctx->isPlanned($object, $n);
     }
 }
