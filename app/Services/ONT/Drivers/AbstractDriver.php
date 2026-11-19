@@ -268,10 +268,14 @@ abstract class AbstractDriver implements ONTInterface
                 if ($type === 'wlan' && in_array($n, $configuredSsids, true)) {
                     continue; // sudah diaktifkan oleh pengaturan SSID
                 }
-                $path = $ctx->root().".LANDevice.1.{$object}.{$n}.Enable";
-                $current = $ctx->tree->value($path);
-                if ($ctx->tree->has($path) && ! in_array(strtolower((string) $current), ['1', 'true'], true)) {
-                    $values[] = $plan->value($path, true, 'xsd:boolean', "{$type}.enable", true);
+                // Huawei: port LAN juga harus mode Layer 3 (X_HW_L3Enable), default-nya false.
+                $fields = $type === 'lan' ? ['Enable' => 'enable', 'X_HW_L3Enable' => 'l3_enable'] : ['Enable' => 'enable'];
+                foreach ($fields as $field => $key) {
+                    $path = $ctx->root().".LANDevice.1.{$object}.{$n}.{$field}";
+                    $current = $ctx->tree->value($path);
+                    if ($ctx->tree->has($path) && ! in_array(strtolower((string) $current), ['1', 'true'], true)) {
+                        $values[] = $plan->value($path, true, 'xsd:boolean', "{$type}.{$key}", true);
+                    }
                 }
             }
         }

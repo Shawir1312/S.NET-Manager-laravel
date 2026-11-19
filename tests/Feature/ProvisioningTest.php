@@ -367,6 +367,7 @@ class ProvisioningTest extends TestCase
         $model->parameterMappings()->update(['verified' => true]);
         $this->device->update(['genieacs_id' => '00259E-HS8145C5-485754439C31B89F', 'serial_number' => '485754439C31B89F']);
         $sim = (new StatefulGenieAcs($this->fiberhomeDoc(['_id' => '00259E-HS8145C5-485754439C31B89F', '_deviceId' => ['_Manufacturer' => 'Huawei Technologies Co., Ltd', '_OUI' => '00259E', '_ProductClass' => 'HS8145C5', '_SerialNumber' => '485754439C31B89F']])))->fake();
+        $sim->doc['InternetGatewayDevice']['LANDevice']['1']['LANEthernetInterfaceConfig']['1']['X_HW_L3Enable'] = ['_value' => [false, 'xsd:boolean'], '_type' => 'xsd:boolean', '_writable' => true];
         $sim->faultOnPathSuffix = 'Lan2Enable';
 
         $id = $this->actingAs($this->tech)->postJson('/api/ont/configure', $this->input())->assertStatus(202)->json('id');
@@ -378,5 +379,6 @@ class ProvisioningTest extends TestCase
         $bound = collect($sim->tasks)->where('name', 'setParameterValues')->flatMap(fn ($t) => array_column($t['parameterValues'], 0));
         $this->assertTrue($bound->contains(fn ($p) => str_ends_with($p, 'Lan1Enable')), 'port lain tetap di-bind');
         $this->assertTrue($bound->contains(fn ($p) => str_ends_with($p, 'SSID1Enable')));
+        $this->assertTrue($sim->doc['InternetGatewayDevice']['LANDevice']['1']['LANEthernetInterfaceConfig']['1']['X_HW_L3Enable']['_value'][0], 'LAN Huawei diubah ke Layer 3');
     }
 }
